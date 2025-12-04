@@ -1,0 +1,21 @@
+{
+  "name": "documentation-standards",
+  "version": "0.1.0",
+  "description": "Enforces documentation standards using rumdl, vale, and Diataxis documentation types. Ensures all documentation is high-quality, consistent, and error-free.",
+  "author": {
+    "name": "cam-barts"
+  },
+  "keywords": [
+    "documentation",
+    "markdown",
+    "rumdl",
+    "vale",
+    "diataxis",
+    "zensical",
+    "linting"
+  ],
+  "commands": "./commands",
+  "agents": "./agents/docs-enforcer.md",
+  "skills": "./skills",
+  "mcpServers": "./.mcp.json"
+}

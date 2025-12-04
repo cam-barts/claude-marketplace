@@ -1,0 +1,22 @@
+{
+  "name": "pytest-standards",
+  "version": "0.1.0",
+  "description": "Enforces opinionated pytest testing standards, ensures all tests pass, maintains code coverage, and promotes property-based testing with Hypothesis. Never satisfied until tests pass and coverage is maintained.",
+  "author": {
+    "name": "cam-barts"
+  },
+  "keywords": [
+    "testing",
+    "pytest",
+    "hypothesis",
+    "coverage",
+    "test-driven-development",
+    "tdd",
+    "property-based-testing",
+    "fixtures",
+    "python"
+  ],
+  "commands": "./commands",
+  "agents": "./agents/test-enforcer.md",
+  "skills": "./skills"
+}

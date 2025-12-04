@@ -1,0 +1,59 @@
+# Template prek/pre-commit configuration
+# Copy to project root as .pre-commit-config.yaml
+# PHILOSOPHY: Prefer Rust-based tools for 10-100x speed improvements
+
+repos:
+  # Built-in hooks (fast, native Rust implementations in prek)
+  - repo: builtin
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: check-merge-conflict
+
+  # General hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: detect-private-key
+
+  # Python: Use Ruff (Rust) instead of black, flake8, isort, pyupgrade
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix, --select, ALL]
+      - id: ruff-format
+
+  # JavaScript/TypeScript: Use Biome (Rust) instead of eslint + prettier
+  # Alternative: Use dprint for formatting only (even faster)
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v0.1.0
+    hooks:
+      - id: biome-check
+        args: [--write]
+        types_or: [javascript, jsx, ts, tsx, json]
+
+  # Markdown/TOML: Use Rust tools
+  - repo: https://github.com/dprint/dprint
+    rev: 0.47.0
+    hooks:
+      - id: dprint
+        types_or: [markdown, toml]
+
+  # Spell checking: Use typos (Rust)
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.16.26
+    hooks:
+      - id: typos
+
+# After creating this file:
+# 1. Install prek: curl -fsSL https://prek.j178.dev/install.sh | sh
+# 2. Install hooks: prek install
+# 3. Run on all files: prek run --all-files
+# 4. Commit: hooks will run automatically

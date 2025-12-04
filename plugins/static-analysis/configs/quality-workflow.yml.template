@@ -1,0 +1,45 @@
+# Template GitHub Actions quality workflow
+# Copy to .github/workflows/quality.yml
+
+name: Code Quality
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  prek:
+    name: Pre-commit Hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run prek
+        uses: j178/prek-action@v1
+        with:
+          args: run --all-files
+
+  megalinter:
+    name: MegaLinter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: MegaLinter
+        uses: oxsecurity/megalinter/flavors/python@v7
+        env:
+          VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload MegaLinter artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MegaLinter-reports
+          path: |
+            megalinter-reports
+            mega-linter.log

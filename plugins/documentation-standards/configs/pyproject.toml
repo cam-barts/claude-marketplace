@@ -1,0 +1,56 @@
+# rumdl configuration for documentation-standards plugin
+# Copy the [tool.rumdl] section to your project's pyproject.toml
+#
+# Installation: pip install rumdl, uv tool install rumdl, or brew install rumdl
+# Usage: rumdl check . --fix
+# Docs: https://github.com/rvben/rumdl
+
+[tool.rumdl]
+# Global configuration options
+line-length = 120
+disable = ["MD034", "MD036"]
+exclude = [
+    ".git",
+    ".github",
+    "node_modules",
+    "vendor",
+    "dist",
+    "build",
+    ".venv",
+]
+respect-gitignore = true
+
+# MD003: Heading style - use ATX style (# headings)
+[tool.rumdl.MD003]
+style = "atx"
+
+# MD004: Unordered list style - use dashes
+[tool.rumdl.MD004]
+style = "dash"
+
+# MD007: Unordered list indentation - 4 spaces
+[tool.rumdl.MD007]
+indent = 4
+
+# MD013: Line length - 120 characters max
+[tool.rumdl.MD013]
+line-length = 120
+code-blocks = true
+tables = false
+headings = true
+
+# MD024: No duplicate headings (siblings only)
+[tool.rumdl.MD024]
+siblings-only = true
+
+# MD029: Ordered list item prefix - use ordered numbers (1. 2. 3.)
+[tool.rumdl.MD029]
+style = "ordered"
+
+# MD033: Inline HTML - allow specific elements
+[tool.rumdl.MD033]
+allowed-elements = ["details", "summary", "br", "img", "kbd", "sub", "sup"]
+
+# MD046: Code block style - use fenced (```)
+[tool.rumdl.MD046]
+style = "fenced"

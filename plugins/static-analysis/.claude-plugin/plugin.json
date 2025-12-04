@@ -1,0 +1,22 @@
+{
+  "name": "static-analysis",
+  "version": "0.1.0",
+  "description": "Enforces code quality through static analysis tools, prek pre-commit hooks, and MegaLinter. Discovers quality standards, recommends appropriate tools, and prevents manual recursion over files. Never satisfied until all issues resolved or explicitly ignored.",
+  "author": {
+    "name": "cam-barts"
+  },
+  "keywords": [
+    "static-analysis",
+    "code-quality",
+    "linting",
+    "prek",
+    "pre-commit",
+    "megalinter",
+    "quality-enforcement",
+    "automation",
+    "ci-cd"
+  ],
+  "commands": "./commands",
+  "agents": "./agents/quality-enforcer.md",
+  "skills": "./skills"
+}

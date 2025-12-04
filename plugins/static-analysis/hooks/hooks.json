@@ -1,0 +1,29 @@
+{
+  "description": "Static analysis and code quality enforcement hooks",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'echo \"NOTICE: If making similar changes to multiple files, consider using an automated tool (formatter, linter with --fix, refactoring tool) instead of manual iteration.\"'",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if echo \"$ARGS\" | grep -qE \"\\.(py|js|ts|jsx|tsx|java|go|rs|rb|php|c|cpp|h|hpp)\"; then echo \"NOTICE: Code modified. Run /quality-check to ensure quality standards are met before committing.\"; fi'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

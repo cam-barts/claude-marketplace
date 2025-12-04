@@ -1,0 +1,66 @@
+{
+  "name": "cam-marketplace",
+  "version": "0.1.0",
+  "description": "Personal Claude Code plugin marketplace with opinionated, quality-enforcing plugins for documentation, testing, and static analysis",
+  "owner": {
+    "name": "cam-barts"
+  },
+  "author": {
+    "name": "cam-barts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cam-barts/claude-marketplace"
+  },
+  "plugins": [
+    {
+      "name": "documentation-standards",
+      "source": "./plugins/documentation-standards",
+      "version": "0.1.0",
+      "description": "Enforces documentation standards using markdownlint, vale, and Diataxis documentation types. Ensures all documentation is high-quality, consistent, and error-free.",
+      "keywords": [
+        "documentation",
+        "markdown",
+        "markdownlint",
+        "vale",
+        "diataxis",
+        "mkdocs",
+        "linting"
+      ]
+    },
+    {
+      "name": "pytest-standards",
+      "source": "./plugins/pytest-standards",
+      "version": "0.1.0",
+      "description": "Enforces opinionated pytest testing standards, ensures all tests pass, maintains code coverage, and promotes property-based testing with Hypothesis. Never satisfied until tests pass and coverage is maintained.",
+      "keywords": [
+        "testing",
+        "pytest",
+        "hypothesis",
+        "coverage",
+        "test-driven-development",
+        "tdd",
+        "property-based-testing",
+        "fixtures",
+        "python"
+      ]
+    },
+    {
+      "name": "static-analysis",
+      "source": "./plugins/static-analysis",
+      "version": "0.1.0",
+      "description": "Enforces code quality through static analysis tools, prek pre-commit hooks, and MegaLinter. Discovers quality standards, recommends appropriate tools, and prevents manual recursion over files. Never satisfied until all issues resolved or explicitly ignored.",
+      "keywords": [
+        "static-analysis",
+        "code-quality",
+        "linting",
+        "prek",
+        "pre-commit",
+        "megalinter",
+        "quality-enforcement",
+        "automation",
+        "ci-cd"
+      ]
+    }
+  ]
+}

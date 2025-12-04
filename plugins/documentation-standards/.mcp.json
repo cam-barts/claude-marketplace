@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "diataxis": {
+      "url": "https://gitmcp.io/evildmp/diataxis-documentation-framework",
+      "description": "Diataxis documentation framework - provides quality standards, guidelines, and best practices for the four documentation types (tutorial, how-to, reference, explanation)",
+      "transport": "sse"
+    }
+  }
+}

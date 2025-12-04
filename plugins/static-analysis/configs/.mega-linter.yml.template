@@ -1,0 +1,49 @@
+# Template MegaLinter configuration
+# Copy to project root as .mega-linter.yml
+# PHILOSOPHY: Prefer Rust-based tools for 10-100x speed improvements
+
+# Apply fixes (use with caution)
+APPLY_FIXES: none  # Change to 'all' or specific linters to enable auto-fix
+
+# Enable specific linters (adjust based on project)
+ENABLE:
+  - PYTHON
+  - JAVASCRIPT
+  - TYPESCRIPT
+  - MARKDOWN
+  - YAML
+  - JSON
+
+# Disable Python tools replaced by Ruff (Rust)
+DISABLE:
+  - PYTHON_PYLINT        # Use Ruff instead
+  - PYTHON_FLAKE8        # Use Ruff instead
+  - PYTHON_BLACK         # Use Ruff format instead
+  - PYTHON_ISORT         # Use Ruff import sorting instead
+  - PYTHON_PYUPGRADE     # Use Ruff instead
+  - PYTHON_AUTOFLAKE     # Use Ruff instead
+  - PYTHON_PYDOCSTYLE    # Use Ruff instead
+  # - JAVASCRIPT_ESLINT  # Use Biome instead (uncomment if using Biome)
+  # - JAVASCRIPT_PRETTIER # Use Biome/dprint instead (uncomment if using Rust tools)
+
+# File/directory exclusions
+FILTER_REGEX_EXCLUDE: '(\.git/|\.venv/|node_modules/|__pycache__/|\.pytest_cache/)'
+
+# Linter-specific configuration (Rust tools preferred)
+# Python: Use Ruff (Rust) - replaces black, flake8, isort, pyupgrade, etc.
+PYTHON_RUFF_ARGUMENTS: '--select=ALL --fix'
+PYTHON_RUFF_CONFIG_FILE: 'pyproject.toml'
+
+# JavaScript/TypeScript: Use Biome (Rust) - replaces eslint + prettier
+# JAVASCRIPT_BIOME_ARGUMENTS: 'check --write'
+
+# Markdown/TOML: Use dprint (Rust) - replaces prettier for these formats
+# MARKDOWN_DPRINT_ARGUMENTS: 'fmt'
+
+# Reporting
+SARIF_REPORTER: true
+TEXT_REPORTER: true
+JSON_REPORTER: true
+
+# GitHub integration (for Actions)
+GITHUB_COMMENT_REPORTER: true

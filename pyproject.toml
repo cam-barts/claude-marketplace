@@ -1,0 +1,65 @@
+# Project configuration for cam_claude_marketplace
+# Quality tools configuration
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "ARG001", "ARG002"]
+"**/tests/**/*.py" = ["S101", "ARG001", "ARG002"]
+"conftest.py" = ["ARG001", "ARG002"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# rumdl markdown linter configuration
+[tool.rumdl]
+line-length = 120
+disable = ["MD013", "MD041"]  # Line length, emphasis-as-heading (stylistic), first-line heading (frontmatter)
+exclude = [
+    ".git",
+    ".github",
+    "node_modules",
+    "vendor",
+    "dist",
+    "build",
+    ".venv",
+]
+respect-gitignore = true
+
+[tool.rumdl.MD003]
+style = "atx"
+
+[tool.rumdl.MD004]
+style = "dash"
+
+[tool.rumdl.MD007]
+indent = 4
+
+[tool.rumdl.MD024]
+siblings-only = true
+
+[tool.rumdl.MD029]
+style = "ordered"
+
+[tool.rumdl.MD033]
+allowed-elements = ["details", "summary", "br", "img", "kbd", "sub", "sup"]
+
+[tool.rumdl.MD046]
+style = "fenced"

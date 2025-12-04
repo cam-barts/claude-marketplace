@@ -1,0 +1,39 @@
+{
+  "description": "Documentation quality enforcement hooks",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if echo \"$ARGS\" | grep -q \"\\.md\"; then FILE_PATH=$(echo \"$ARGS\" | grep -o \"file_path[^,}]*\" | cut -d\":\" -f2 | tr -d \" \\\"}\"); if [ -n \"$FILE_PATH\" ] && [ -f \"$FILE_PATH\" ]; then if ! grep -q \"^---\" \"$FILE_PATH\" 2>/dev/null || ! grep -q \"documentation_type:\" \"$FILE_PATH\" 2>/dev/null; then echo \"{\\\"decision\\\":\\\"warn\\\",\\\"message\\\":\\\"Markdown file should have frontmatter with documentation_type field (tutorial/how-to/reference/explanation)\\\"}\"; fi; fi; fi'",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if echo \"$TOOL_NAME\" | grep -q \"Write\" && echo \"$ARGS\" | grep -q \"\\.md\"; then FILE_PATH=$(echo \"$ARGS\" | grep -o \"file_path[^,}]*\" | cut -d\":\" -f2 | tr -d \" \\\"}\"); if [ -n \"$FILE_PATH\" ] && [ -f \"$FILE_PATH\" ]; then if command -v rumdl >/dev/null 2>&1; then rumdl check \"$FILE_PATH\" 2>&1 || echo \"NOTICE: rumdl found issues. Run /docs-fix to auto-correct.\"; fi; if command -v vale >/dev/null 2>&1; then CONFIG=\"${CLAUDE_PLUGIN_ROOT}/configs/vale.ini\"; if [ -f .vale.ini ] || [ -f ~/.vale.ini ]; then CONFIG=\"\"; fi; vale ${CONFIG:+--config=$CONFIG} \"$FILE_PATH\" 2>&1 || echo \"NOTICE: vale found prose issues. Review suggestions.\"; fi; fi; fi'",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if echo \"$ARGS\" | grep -qE \"\\.(js|ts|jsx|tsx|py|java|go|rs|rb|php|c|cpp|h|hpp)\"; then echo \"NOTICE: Code file modified. Consider running /docs-recommend to check if documentation needs updating.\"; fi'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

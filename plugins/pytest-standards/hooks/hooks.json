@@ -1,0 +1,17 @@
+{
+  "description": "Pytest testing quality enforcement hooks",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if echo \"$ARGS\" | grep -q \"test_.*\\.py\"; then echo \"NOTICE: Test file modified. Run /test-run to verify all tests still pass.\"; elif echo \"$ARGS\" | grep -q \"\\.py\"; then echo \"NOTICE: Source code modified. Consider running /test-coverage to check if coverage dropped and /test-run to ensure tests pass.\"; fi'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

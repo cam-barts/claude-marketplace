@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.pyright/
+.pyre/
+
+# Linting caches
+.ruff_cache/
+.rumdl_cache/
+
+# Documentation build
+docs/_build/
+
+# OS files
+.DS_Store
+Thumbs.db
+.fuse_*
+
+# Local configuration
+.env
+.env.local
+*.local
+
+# Temporary files
+*.tmp
+*.temp
+*.log
