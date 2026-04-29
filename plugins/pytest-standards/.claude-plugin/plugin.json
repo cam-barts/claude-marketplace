@@ -1,6 +1,6 @@
 {
   "name": "pytest-standards",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Enforces opinionated pytest testing standards, ensures all tests pass, maintains code coverage, and promotes property-based testing with Hypothesis. Never satisfied until tests pass and coverage is maintained.",
   "author": {
     "name": "cam-barts"

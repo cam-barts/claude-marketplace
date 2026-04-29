@@ -88,13 +88,9 @@ Comprehensive validation with zero-error enforcement. Invokes the docs-enforcer 
 
 ## Skills
 
-### `documentation-work`
+### documentation-work
 
-Automatically invoked when Claude works on documentation tasks. Ensures validation, quality checking, and standards compliance.
-
-### `documentation-recommendations`
-
-Automatically invoked when Claude makes code changes. Proactively suggests documentation updates, identifies gaps, and ensures documentation stays in sync with the codebase.
+Invoked when writing, fixing, validating, or planning documentation. Scripts: `validate_links.py`, `sync_docstrings.py`. Carries Diataxis and Keep-a-Changelog conventions.
 
 ## Diataxis Documentation Types
 

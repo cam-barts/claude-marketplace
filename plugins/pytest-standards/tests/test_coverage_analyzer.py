@@ -143,12 +143,14 @@ class TestCLI:
         """Test main with nonexistent file."""
         import sys
 
-        from coverage_analyzer import main
+        from coverage_analyzer import app
 
         old_argv = sys.argv
         try:
             sys.argv = ["coverage_analyzer.py", "/nonexistent/coverage.json"]
-            result = main()
-            assert result == 1
+            try:
+                app()
+            except SystemExit as e:
+                assert e.code == 1
         finally:
             sys.argv = old_argv

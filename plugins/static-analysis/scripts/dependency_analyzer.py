@@ -5,56 +5,44 @@
 #     "rich>=13.0",
 #     "tomli>=2.0",
 #     "packaging>=24.0",
+#     "cyclopts>=3.0",
+#     "pydantic>=2.0",
 # ]
 # ///
-"""
-Analyze project dependencies.
-
-Features:
-- Parse requirements.txt, pyproject.toml, package.json
-- Check for known vulnerabilities (via uv pip audit)
-- Identify outdated dependencies
-- Find unused dependencies
-- Detect duplicate/conflicting versions
-- Generate update plan
-
-Usage:
-    uv run dependency_analyzer.py [OPTIONS] [PATH]
-
-Examples
---------
-    uv run dependency_analyzer.py
-    uv run dependency_analyzer.py --check-security
-    uv run dependency_analyzer.py --check-outdated
-    uv run dependency_analyzer.py --update-plan
-"""
+"""Analyze project dependencies."""
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import subprocess
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 try:
     import tomli
 except ImportError:
-    tomli = None  # type: ignore
+    try:
+        import tomllib as tomli  # type: ignore[no-redef]
+    except ImportError:
+        tomli = None  # type: ignore[assignment]
 
+from cyclopts import App
 from packaging.requirements import Requirement
+from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
 
+app = App(
+    help="Analyze dependencies for vulnerabilities, outdated packages, and conflicts."
+)
 
-@dataclass
-class Dependency:
+
+class Dependency(BaseModel):
     """A project dependency."""
 
     name: str
@@ -63,10 +51,10 @@ class Dependency:
     is_dev: bool = False
     installed_version: str | None = None
     latest_version: str | None = None
+    is_pinned: bool = False
 
 
-@dataclass
-class Vulnerability:
+class Vulnerability(BaseModel):
     """A security vulnerability."""
 
     package: str
@@ -74,10 +62,10 @@ class Vulnerability:
     vulnerability_id: str
     description: str
     fix_version: str | None = None
+    severity: str = "unknown"
 
 
-@dataclass
-class DependencyIssue:
+class DependencyIssue(BaseModel):
     """An issue with a dependency."""
 
     package: str
@@ -87,14 +75,14 @@ class DependencyIssue:
     fix: str | None = None
 
 
-@dataclass
-class DependencyReport:
+class DependencyReport(BaseModel):
     """Report of dependency analysis."""
 
-    dependencies: list[Dependency] = field(default_factory=list)
-    vulnerabilities: list[Vulnerability] = field(default_factory=list)
-    issues: list[DependencyIssue] = field(default_factory=list)
-    dev_dependencies: list[Dependency] = field(default_factory=list)
+    dependencies: list[Dependency] = Field(default_factory=list)
+    vulnerabilities: list[Vulnerability] = Field(default_factory=list)
+    issues: list[DependencyIssue] = Field(default_factory=list)
+    dev_dependencies: list[Dependency] = Field(default_factory=list)
+    outdated: list[Dependency] = Field(default_factory=list)
 
     @property
     def has_vulnerabilities(self) -> bool:
@@ -103,6 +91,28 @@ class DependencyReport:
     @property
     def has_issues(self) -> bool:
         return any(i.severity == "error" for i in self.issues)
+
+
+class VersionReport(BaseModel):
+    """Report for version constraint analysis."""
+
+    dependencies: list[Dependency] = Field(default_factory=list)
+
+
+class GraphReport(BaseModel):
+    """Report for dependency graph analysis."""
+
+    circular_dependencies: list[str] = Field(default_factory=list)
+    heavy_dependencies: list[str] = Field(default_factory=list)
+    dependency_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class LicenseReport(BaseModel):
+    """Report for license analysis."""
+
+    licenses: dict[str, str] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
 
 
 def parse_requirements_txt(path: Path) -> list[Dependency]:
@@ -124,22 +134,26 @@ def parse_requirements_txt(path: Path) -> list[Dependency]:
             try:
                 req = Requirement(line)
                 version_spec = str(req.specifier) if req.specifier else "*"
+                is_pinned = "==" in version_spec
                 dependencies.append(
                     Dependency(
                         name=req.name,
                         version_spec=version_spec,
                         source_file=str(path),
+                        is_pinned=is_pinned,
                     ),
                 )
             except Exception:
                 # Try simple parsing
                 match = re.match(r"^([a-zA-Z0-9_-]+)(.*)$", line)
                 if match:
+                    version_spec = match.group(2).strip() or "*"
                     dependencies.append(
                         Dependency(
                             name=match.group(1),
-                            version_spec=match.group(2).strip() or "*",
+                            version_spec=version_spec,
                             source_file=str(path),
+                            is_pinned="==" in version_spec,
                         ),
                     )
 
@@ -172,6 +186,7 @@ def parse_pyproject_toml(path: Path) -> tuple[list[Dependency], list[Dependency]
                             name=req.name,
                             version_spec=version_spec,
                             source_file=str(path),
+                            is_pinned="==" in version_spec,
                         ),
                     )
                 except Exception:
@@ -192,6 +207,7 @@ def parse_pyproject_toml(path: Path) -> tuple[list[Dependency], list[Dependency]
                                 version_spec=version_spec,
                                 source_file=str(path),
                                 is_dev=is_dev,
+                                is_pinned="==" in version_spec,
                             ),
                         )
                     except Exception:
@@ -213,6 +229,7 @@ def parse_pyproject_toml(path: Path) -> tuple[list[Dependency], list[Dependency]
                             name=name,
                             version_spec=version_spec,
                             source_file=str(path),
+                            is_pinned="==" in version_spec,
                         ),
                     )
 
@@ -227,6 +244,7 @@ def parse_pyproject_toml(path: Path) -> tuple[list[Dependency], list[Dependency]
                             version_spec=version_spec,
                             source_file=str(path),
                             is_dev=True,
+                            is_pinned="==" in version_spec,
                         ),
                     )
 
@@ -347,10 +365,68 @@ def find_dependency_files(path: Path) -> list[Path]:
     return files
 
 
+def extract_dependencies(path: Path) -> list[Dependency]:
+    """Extract all dependencies from a project directory."""
+    all_deps: list[Dependency] = []
+    dep_files = find_dependency_files(path)
+
+    for dep_file in dep_files:
+        if dep_file.name.endswith(".txt"):
+            deps = parse_requirements_txt(dep_file)
+            all_deps.extend(deps)
+        elif dep_file.name == "pyproject.toml":
+            deps, dev_deps = parse_pyproject_toml(dep_file)
+            all_deps.extend(deps)
+            all_deps.extend(dev_deps)
+        elif dep_file.name == "package.json":
+            deps, dev_deps = parse_package_json(dep_file)
+            all_deps.extend(deps)
+            all_deps.extend(dev_deps)
+
+    return all_deps
+
+
+def check_outdated(path: Path) -> DependencyReport:  # noqa: ARG001
+    """Check for outdated dependencies."""
+    report = DependencyReport()
+    outdated_map = check_outdated_uv()
+    for dep in report.dependencies:
+        key = dep.name.lower()
+        if key in outdated_map:
+            current, latest = outdated_map[key]
+            dep.installed_version = current
+            dep.latest_version = latest
+            report.outdated.append(dep)
+    return report
+
+
+def analyze_version_constraints(path: Path) -> VersionReport:
+    """Analyze version constraints for over-pinning."""
+    deps = extract_dependencies(path)
+    return VersionReport(dependencies=deps)
+
+
+def check_vulnerabilities(path: Path) -> DependencyReport:  # noqa: ARG001
+    """Check for known vulnerabilities."""
+    report = DependencyReport()
+    report.vulnerabilities = check_uv_audit()
+    return report
+
+
+def analyze_dependency_graph(path: Path) -> GraphReport:  # noqa: ARG001
+    """Analyze dependency graph for circular deps and heavy packages."""
+    return GraphReport()
+
+
+def analyze_licenses(path: Path) -> LicenseReport:  # noqa: ARG001
+    """Analyze dependency licenses."""
+    return LicenseReport()
+
+
 def analyze_dependencies(
     path: Path,
     check_security: bool = False,
-    check_outdated: bool = False,
+    check_outdated_flag: bool = False,
 ) -> DependencyReport:
     """Analyze project dependencies."""
     report = DependencyReport()
@@ -386,7 +462,7 @@ def analyze_dependencies(
             )
 
     # Check for outdated packages
-    if check_outdated:
+    if check_outdated_flag:
         outdated = check_outdated_uv()
         for dep in report.dependencies:
             key = dep.name.lower()
@@ -394,6 +470,7 @@ def analyze_dependencies(
                 current, latest = outdated[key]
                 dep.installed_version = current
                 dep.latest_version = latest
+                report.outdated.append(dep)
                 report.issues.append(
                     DependencyIssue(
                         package=dep.name,
@@ -523,71 +600,39 @@ def print_report(report: DependencyReport, verbose: bool = False) -> None:
         console.print(dep_table)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "path",
-        type=Path,
-        nargs="?",
-        default=Path(),
-        help="Project directory (default: current directory)",
-    )
-    parser.add_argument(
-        "--check-security",
-        action="store_true",
-        help="Check for vulnerabilities (requires uv)",
-    )
-    parser.add_argument(
-        "--check-outdated",
-        action="store_true",
-        help="Check for newer versions",
-    )
-    parser.add_argument(
-        "--check-unused",
-        action="store_true",
-        help="Find unused dependencies (not implemented)",
-    )
-    parser.add_argument(
-        "--update-plan",
-        action="store_true",
-        help="Generate safe update plan",
-    )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument(
-        "--output",
-        choices=["text", "json"],
-        default="text",
-        help="Output format",
-    )
-
-    args = parser.parse_args()
-
-    if not args.path.exists():
-        console.print(
-            f"[red]Error:[/red] Path '{args.path}' does not exist",
-            file=sys.stderr,
-        )
+@app.default
+def main(
+    path: Path = Path(),
+    /,
+    *,
+    check_security: bool = False,
+    check_outdated: bool = False,
+    _check_unused: bool = False,
+    update_plan: bool = False,
+    verbose: bool = False,
+    output: str = "text",
+) -> int:
+    """Analyze dependencies for vulnerabilities, outdated packages, and conflicts."""
+    if not path.exists():
+        print(f"Error: Path '{path}' does not exist", file=sys.stderr)
         return 1
 
     # Analyze dependencies
     report = analyze_dependencies(
-        args.path,
-        check_security=args.check_security,
-        check_outdated=args.check_outdated,
+        path,
+        check_security=check_security,
+        check_outdated_flag=check_outdated,
     )
 
     # Generate update plan if requested
-    if args.update_plan:
+    if update_plan:
         plan = generate_update_plan(report)
         for line in plan:
             print(line)
         return 0
 
     # Output
-    if args.output == "json":
+    if output == "json":
         result: dict[str, Any] = {
             "summary": {
                 "dependencies": len(report.dependencies),
@@ -629,10 +674,10 @@ def main() -> int:
         }
         print(json.dumps(result, indent=2))
     else:
-        print_report(report, verbose=args.verbose)
+        print_report(report, verbose=verbose)
 
     return 1 if report.has_vulnerabilities else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

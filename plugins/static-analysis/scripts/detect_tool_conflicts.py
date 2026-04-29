@@ -4,49 +4,37 @@
 # dependencies = [
 #     "rich>=13.0",
 #     "tomli>=2.0",
+#     "cyclopts>=3.0",
+#     "pydantic>=2.0",
 # ]
 # ///
-"""
-Identify conflicting or redundant linting tools.
-
-Features:
-- Analyze installed linters and their coverage
-- Detect overlapping rules between tools
-- Identify redundant tools (e.g., black + ruff format)
-- Suggest consolidation
-- Generate migration plan
-
-Usage:
-    uv run detect_tool_conflicts.py [OPTIONS] [PATH]
-
-Examples
---------
-    uv run detect_tool_conflicts.py
-    uv run detect_tool_conflicts.py --installed
-    uv run detect_tool_conflicts.py --suggest
-    uv run detect_tool_conflicts.py --migrate
-"""
+"""Identify conflicting or redundant linting tools."""
 
 from __future__ import annotations
 
-import argparse
 import json
 import shutil
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 try:
     import tomli
 except ImportError:
-    tomli = None  # type: ignore
+    try:
+        import tomllib as tomli  # type: ignore[no-redef]
+    except ImportError:
+        tomli = None  # type: ignore[assignment]
 
+from cyclopts import App
+from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
+
+app = App(help="Detect overlapping or redundant linters and suggest consolidation.")
 
 # Tool capabilities and overlaps
 TOOL_CAPABILITIES: dict[str, dict[str, Any]] = {
@@ -169,8 +157,7 @@ TOOL_CAPABILITIES: dict[str, dict[str, Any]] = {
 }
 
 
-@dataclass
-class ToolConflict:
+class ToolConflict(BaseModel):
     """A conflict between tools."""
 
     tools: list[str]
@@ -180,8 +167,7 @@ class ToolConflict:
     suggestion: str
 
 
-@dataclass
-class InstalledTool:
+class InstalledTool(BaseModel):
     """An installed tool."""
 
     name: str
@@ -189,13 +175,33 @@ class InstalledTool:
     config_file: str | None = None
 
 
-@dataclass
-class ConflictReport:
+class RedundantTool(BaseModel):
+    """A tool identified as redundant."""
+
+    tool: str
+    replaces: str
+    suggestion: str
+
+
+class MigrationSuggestion(BaseModel):
+    """A suggestion for tool migration."""
+
+    source: str
+    target: str
+    reason: str
+    commands: list[str] = Field(default_factory=list)
+
+
+class ConflictReport(BaseModel):
     """Report of tool conflicts."""
 
-    installed_tools: list[InstalledTool] = field(default_factory=list)
-    conflicts: list[ToolConflict] = field(default_factory=list)
-    suggestions: list[str] = field(default_factory=list)
+    installed_tools: list[InstalledTool] = Field(default_factory=list)
+    conflicts: list[ToolConflict] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
+    redundant: list[RedundantTool] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    config_conflicts: list[str] = Field(default_factory=list)
+    overlapping_rules: list[str] = Field(default_factory=list)
 
     @property
     def has_conflicts(self) -> bool:
@@ -305,109 +311,201 @@ def analyze_pyproject(path: Path) -> list[str]:
         return []
 
 
-def detect_conflicts(
-    installed: list[InstalledTool],
-    path: Path,  # noqa: ARG001
-) -> list[ToolConflict]:
-    """Detect conflicts between installed tools."""
-    conflicts: list[ToolConflict] = []
-    installed_names = {t.name for t in installed}
-
-    # Check for overlapping tools
+def _detect_redundant_tools(installed_names: set[str]) -> list[RedundantTool]:
+    """Detect redundant tools from a set of installed tool names."""
+    redundant: list[RedundantTool] = []
     for tool_name in installed_names:
         if tool_name not in TOOL_CAPABILITIES:
             continue
-
         tool_info = TOOL_CAPABILITIES[tool_name]
-
-        # Check if this tool replaces others that are also installed
         if "replaces" in tool_info:
             for replaced in tool_info["replaces"]:
                 if replaced in installed_names:
-                    conflicts.append(
-                        ToolConflict(
-                            tools=[tool_name, replaced],
-                            conflict_type="redundant",
-                            severity="warning",
-                            message=f"'{tool_name}' can replace '{replaced}'",
+                    redundant.append(
+                        RedundantTool(
+                            tool=replaced,
+                            replaces=tool_name,
                             suggestion=f"Remove '{replaced}', use '{tool_name}'",
-                        ),
+                        )
                     )
+    return redundant
 
-        # Check overlaps
-        if "overlaps_with" in tool_info:
-            for overlap in tool_info["overlaps_with"]:
-                # Only report each pair once
-                if overlap in installed_names and tool_name < overlap:
-                    conflicts.append(
-                        ToolConflict(
-                            tools=[tool_name, overlap],
-                            conflict_type="overlap",
-                            severity="info",
-                            message=f"'{tool_name}' and '{overlap}' overlap",
-                            suggestion="Consider using only one of them",
-                        ),
-                    )
 
-    # Check for specific problematic combinations
-    if "black" in installed_names and "ruff" in installed_names:
-        # Check if ruff format is enabled
-        conflicts.append(
-            ToolConflict(
-                tools=["black", "ruff"],
-                conflict_type="redundant",
-                severity="warning",
-                message="Both 'black' and 'ruff' installed - ruff can format code",
-                suggestion="Use 'ruff format' instead of 'black'",
-            ),
-        )
+def _detect_config_conflicts(path: Path) -> list[str]:
+    """Detect configuration conflicts between tools."""
+    if tomli is None:
+        return []
 
-    if "flake8" in installed_names and "ruff" in installed_names:
-        conflicts.append(
-            ToolConflict(
-                tools=["flake8", "ruff"],
-                conflict_type="redundant",
-                severity="warning",
-                message="Both 'flake8' and 'ruff' - ruff includes flake8 rules",
-                suggestion="Use 'ruff check' instead of 'flake8'",
-            ),
-        )
+    pyproject = path / "pyproject.toml"
+    if not pyproject.exists():
+        return []
 
-    if "prettier" in installed_names and "biome" in installed_names:
-        conflicts.append(
-            ToolConflict(
-                tools=["prettier", "biome"],
-                conflict_type="redundant",
-                severity="warning",
-                message="Both 'prettier' and 'biome' installed - biome can format",
-                suggestion="Use 'biome format' instead of 'prettier'",
-            ),
-        )
+    conflicts: list[str] = []
+    try:
+        data = tomli.loads(pyproject.read_bytes().decode("utf-8"))
+        tool = data.get("tool", {})
 
-    if "markdownlint" in installed_names:
-        # Always recommend rumdl for markdownlint users
-        if "rumdl" in installed_names:
+        ruff_line = None
+        black_line = None
+
+        if "ruff" in tool:
+            ruff_line = tool["ruff"].get("line-length")
+        if "black" in tool:
+            black_line = tool["black"].get("line-length")
+
+        if ruff_line is not None and black_line is not None and ruff_line != black_line:
             conflicts.append(
-                ToolConflict(
-                    tools=["markdownlint", "rumdl"],
-                    conflict_type="redundant",
-                    severity="warning",
-                    message="Both 'markdownlint' and 'rumdl' - rumdl is faster",
-                    suggestion="Use 'rumdl check --fix' instead of 'markdownlint'",
-                ),
+                f"Line length conflict: ruff={ruff_line}, black={black_line}"
             )
-        else:
-            conflicts.append(
-                ToolConflict(
-                    tools=["markdownlint"],
-                    conflict_type="upgrade",
-                    severity="info",
-                    message="'markdownlint' can be replaced with 'rumdl' (10x faster)",
-                    suggestion="Install: uv tool install rumdl; run 'rumdl check'",
-                ),
-            )
+        elif "ruff" in tool and "black" in tool:
+            # Both configured — flag as potential conflict even if line lengths match
+            conflicts.append("Both ruff and black are configured in pyproject.toml")
+
+    except Exception:
+        pass
 
     return conflicts
+
+
+def detect_conflicts(
+    path: Path,
+    check_installed: bool = False,
+) -> ConflictReport:
+    """Detect conflicts between tools in a repository."""
+    report = ConflictReport()
+
+    # Find tools via config files or installed binaries
+    if check_installed:
+        for tool_name in list(TOOL_CAPABILITIES.keys()):
+            is_installed, version = check_tool_installed(tool_name)
+            if is_installed:
+                report.installed_tools.append(
+                    InstalledTool(name=tool_name, version=version),
+                )
+    else:
+        configs = find_tool_configs(path)
+        for tool_name, config_file in configs.items():
+            report.installed_tools.append(
+                InstalledTool(name=tool_name, config_file=config_file),
+            )
+
+        pyproject_tools = analyze_pyproject(path)
+        for tool_name in pyproject_tools:
+            if not any(t.name == tool_name for t in report.installed_tools):
+                report.installed_tools.append(InstalledTool(name=tool_name))
+
+    installed_names = {t.name for t in report.installed_tools}
+
+    # Detect redundant tools
+    report.redundant = _detect_redundant_tools(installed_names)
+    for r in report.redundant:
+        report.warnings.append(r.suggestion)
+
+    # Detect config conflicts
+    report.config_conflicts = _detect_config_conflicts(path)
+    if report.config_conflicts:
+        report.warnings.extend(report.config_conflicts)
+
+    # Detect overlapping rules (tools with shared capabilities that are both present)
+    for tool_name in installed_names:
+        if tool_name not in TOOL_CAPABILITIES:
+            continue
+        tool_info = TOOL_CAPABILITIES[tool_name]
+        for overlap in tool_info.get("overlaps_with", []):
+            if overlap in installed_names and tool_name < overlap:
+                overlap_msg = f"'{tool_name}' and '{overlap}' have overlapping rules"
+                report.overlapping_rules.append(overlap_msg)
+
+    # Build legacy conflicts list for print_report compatibility
+    for r in report.redundant:
+        report.conflicts.append(
+            ToolConflict(
+                tools=[r.replaces, r.tool],
+                conflict_type="redundant",
+                severity="warning",
+                message=f"'{r.replaces}' can replace '{r.tool}'",
+                suggestion=r.suggestion,
+            )
+        )
+
+    # Generate suggestions (migration plan)
+    if report.redundant:
+        report.suggestions = generate_migration_plan(report.conflicts)
+
+    return report
+
+
+def suggest_migrations(path: Path) -> list[MigrationSuggestion]:
+    """Suggest tool migrations for a repository."""
+    report = detect_conflicts(path)
+    suggestions: list[MigrationSuggestion] = []
+
+    for conflict in report.conflicts:
+        if conflict.conflict_type == "redundant" and len(conflict.tools) == 2:
+            keeper = conflict.tools[0]
+            removed = conflict.tools[1]
+            suggestions.append(
+                MigrationSuggestion(
+                    source=removed,
+                    target=keeper,
+                    reason=conflict.message,
+                    commands=[conflict.suggestion],
+                )
+            )
+
+    # Also suggest ruff for flake8/black users even without explicit conflict
+    configs = find_tool_configs(path)
+    has_flake8 = "flake8" in configs or (path / ".flake8").exists()
+    has_black = "black" in configs
+    has_ruff = "ruff" in configs or (path / "ruff.toml").exists()
+
+    if (has_flake8 or has_black) and not has_ruff:
+        suggestions.append(
+            MigrationSuggestion(
+                source="flake8/black",
+                target="ruff",
+                reason="ruff replaces flake8 and black with a single fast tool",
+                commands=["uv tool install ruff"],
+            )
+        )
+
+    return suggestions
+
+
+def generate_migration_config(path: Path, target: str) -> str:  # noqa: ARG001
+    """Generate migration configuration for moving to a target tool."""
+    if target == "ruff":
+        # Parse existing flake8 config if present
+        flake8_path = path / ".flake8"
+        line_length = 88
+        ignore: list[str] = []
+
+        if flake8_path.exists() and tomli is not None:
+            try:
+                import configparser
+
+                cfg = configparser.ConfigParser()
+                cfg.read(str(flake8_path))
+                if "flake8" in cfg:
+                    if "max-line-length" in cfg["flake8"]:
+                        line_length = int(cfg["flake8"]["max-line-length"])
+                    if "extend-ignore" in cfg["flake8"]:
+                        ignore = [
+                            x.strip()
+                            for x in cfg["flake8"]["extend-ignore"].split(",")
+                            if x.strip()
+                        ]
+            except Exception:
+                pass
+
+        parts = [f'line-length = {line_length}', 'select = ["E", "F", "W", "I"]']
+        if ignore:
+            ignore_str = ", ".join(f'"{i}"' for i in ignore)
+            parts.append(f"ignore = [{ignore_str}]")
+
+        return "\n".join(parts)
+
+    return ""
 
 
 def generate_migration_plan(conflicts: list[ToolConflict]) -> list[str]:
@@ -463,15 +561,6 @@ def generate_migration_plan(conflicts: list[ToolConflict]) -> list[str]:
         steps.append(
             "uv tool install rumdl  # or: pip install rumdl, brew install rumdl"
         )
-        steps.append("")
-        steps.append("# Initialize rumdl config in pyproject.toml")
-        steps.append("rumdl init --pyproject")
-        steps.append("")
-        steps.append("# Import existing markdownlint config (optional)")
-        steps.append("# rumdl import .markdownlint.json")
-        steps.append("")
-        steps.append("# Remove old markdownlint config files")
-        steps.append("# rm .markdownlint.json .markdownlintrc")
 
     return steps
 
@@ -480,41 +569,8 @@ def detect_tool_conflicts(
     path: Path,
     check_installed: bool = True,
 ) -> ConflictReport:
-    """Detect conflicts between tools."""
-    report = ConflictReport()
-
-    # Find installed tools
-    tools_to_check = list(TOOL_CAPABILITIES.keys())
-
-    if check_installed:
-        for tool_name in tools_to_check:
-            is_installed, version = check_tool_installed(tool_name)
-            if is_installed:
-                report.installed_tools.append(
-                    InstalledTool(name=tool_name, version=version),
-                )
-    else:
-        # Check config files
-        configs = find_tool_configs(path)
-        for tool_name, config_file in configs.items():
-            report.installed_tools.append(
-                InstalledTool(name=tool_name, config_file=config_file),
-            )
-
-        # Also check pyproject.toml
-        pyproject_tools = analyze_pyproject(path)
-        for tool_name in pyproject_tools:
-            if not any(t.name == tool_name for t in report.installed_tools):
-                report.installed_tools.append(InstalledTool(name=tool_name))
-
-    # Detect conflicts
-    report.conflicts = detect_conflicts(report.installed_tools, path)
-
-    # Generate suggestions
-    if report.conflicts:
-        report.suggestions = generate_migration_plan(report.conflicts)
-
-    return report
+    """Detect conflicts between tools (alias for detect_conflicts)."""
+    return detect_conflicts(path, check_installed=check_installed)
 
 
 def print_report(report: ConflictReport, verbose: bool = False) -> None:  # noqa: ARG001
@@ -560,67 +616,35 @@ def print_report(report: ConflictReport, verbose: bool = False) -> None:  # noqa
             console.print(f"  {step}")
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "path",
-        type=Path,
-        nargs="?",
-        default=Path(),
-        help="Repository to analyze (default: current directory)",
-    )
-    parser.add_argument(
-        "--installed",
-        action="store_true",
-        help="Only analyze installed tools",
-    )
-    parser.add_argument(
-        "--config",
-        action="store_true",
-        help="Only analyze tools with config files",
-    )
-    parser.add_argument(
-        "--suggest",
-        action="store_true",
-        help="Show consolidation suggestions",
-    )
-    parser.add_argument(
-        "--migrate",
-        action="store_true",
-        help="Generate migration commands",
-    )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument(
-        "--output",
-        choices=["text", "json"],
-        default="text",
-        help="Output format",
-    )
-
-    args = parser.parse_args()
-
-    if not args.path.exists():
-        console.print(
-            f"[red]Error:[/red] Path '{args.path}' does not exist",
-            file=sys.stderr,
-        )
+@app.default
+def main(
+    path: Path = Path(),
+    /,
+    *,
+    _installed: bool = False,
+    config: bool = False,
+    _suggest: bool = False,
+    migrate: bool = False,
+    verbose: bool = False,
+    output: str = "text",
+) -> int:
+    """Detect overlapping or redundant linters and suggest consolidation."""
+    if not path.exists():
+        print(f"Error: Path '{path}' does not exist", file=sys.stderr)
         return 1
 
     # Detect conflicts
-    check_installed = not args.config
-    report = detect_tool_conflicts(args.path, check_installed=check_installed)
+    check_installed = not config
+    report = detect_conflicts(path, check_installed=check_installed)
 
     # Show migration plan if requested
-    if args.migrate and report.suggestions:
+    if migrate and report.suggestions:
         for step in report.suggestions:
             print(step)
         return 0
 
     # Output
-    if args.output == "json":
+    if output == "json":
         result: dict[str, Any] = {
             "installed_tools": [
                 {
@@ -644,10 +668,10 @@ def main() -> int:
         }
         print(json.dumps(result, indent=2))
     else:
-        print_report(report, verbose=args.verbose)
+        print_report(report, verbose=verbose)
 
     return 1 if report.has_conflicts else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

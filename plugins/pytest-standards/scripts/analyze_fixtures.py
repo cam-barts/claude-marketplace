@@ -3,6 +3,8 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #     "rich>=13.0",
+#     "cyclopts>=3.0",
+#     "pydantic>=2.0",
 # ]
 # ///
 """
@@ -29,37 +31,39 @@ Examples
 
 from __future__ import annotations
 
-import argparse
 import ast
 import json
 import sys
 from collections import defaultdict
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from cyclopts import App
+from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
 
+app = App(help="Analyze pytest fixture complexity and dependencies.")
 
-@dataclass
-class Fixture:
+
+class Fixture(BaseModel):
     """A pytest fixture definition."""
 
     name: str
     file_path: Path
     line_number: int
     scope: str
-    dependencies: list[str] = field(default_factory=list)
-    params: list[str] = field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
+    params: list[str] = Field(default_factory=list)
     autouse: bool = False
 
+    model_config = {"arbitrary_types_allowed": True}
 
-@dataclass
-class FixtureUsage:
+
+class FixtureUsage(BaseModel):
     """A usage of a fixture in a test."""
 
     fixture_name: str
@@ -67,9 +71,10 @@ class FixtureUsage:
     file_path: Path
     line_number: int
 
+    model_config = {"arbitrary_types_allowed": True}
 
-@dataclass
-class FixtureIssue:
+
+class FixtureIssue(BaseModel):
     """An issue found with fixtures."""
 
     fixture_name: str
@@ -79,15 +84,18 @@ class FixtureIssue:
     file_path: Path | None = None
     line_number: int | None = None
 
+    model_config = {"arbitrary_types_allowed": True}
 
-@dataclass
-class FixtureReport:
+
+class FixtureReport(BaseModel):
     """Report of fixture analysis."""
 
-    fixtures: dict[str, Fixture] = field(default_factory=dict)
-    usages: list[FixtureUsage] = field(default_factory=list)
-    issues: list[FixtureIssue] = field(default_factory=list)
-    dependency_depths: dict[str, int] = field(default_factory=dict)
+    fixtures: dict[str, Fixture] = Field(default_factory=dict)
+    usages: list[FixtureUsage] = Field(default_factory=list)
+    issues: list[FixtureIssue] = Field(default_factory=list)
+    dependency_depths: dict[str, int] = Field(default_factory=dict)
+
+    model_config = {"arbitrary_types_allowed": True}
 
     @property
     def has_issues(self) -> bool:
@@ -557,56 +565,33 @@ def print_report(report: FixtureReport, verbose: bool = False) -> None:
                 console.print(f"  ... and {len(issues) - 5} more")
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("path", type=Path, help="Test directory to analyze")
-    parser.add_argument(
-        "--max-depth",
-        type=int,
-        default=3,
-        help="Maximum acceptable fixture depth (default: 3)",
-    )
-    parser.add_argument(
-        "--graph",
-        action="store_true",
-        help="Output DOT format for visualization",
-    )
-    parser.add_argument(
-        "--unused",
-        action="store_true",
-        help="Report unused fixtures",
-    )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument(
-        "--output",
-        choices=["text", "json", "dot"],
-        default="text",
-        help="Output format",
-    )
-
-    args = parser.parse_args()
-
-    if not args.path.exists():
-        console.print(
-            f"[red]Error:[/red] Path '{args.path}' does not exist",
-            file=sys.stderr,
-        )
-        return 1
+@app.default
+def main(
+    path: Path,
+    /,
+    *,
+    max_depth: int = 3,
+    graph: bool = False,
+    unused: bool = False,
+    verbose: bool = False,
+    output: str = "text",
+) -> None:
+    """Analyze pytest fixture complexity and dependencies."""
+    if not path.exists():
+        print(f"Error: Path '{path}' does not exist", file=sys.stderr)
+        raise SystemExit(1)
 
     # Analyze fixtures
     report = analyze_fixtures(
-        args.path,
-        max_depth=args.max_depth,
-        find_unused=args.unused,
+        path,
+        max_depth=max_depth,
+        find_unused=unused,
     )
 
     # Output
-    if args.output == "dot" or args.graph:
+    if output == "dot" or graph:
         print(generate_dot_graph(report.fixtures))
-    elif args.output == "json":
+    elif output == "json":
         result: dict[str, Any] = {
             "summary": {
                 "total_fixtures": len(report.fixtures),
@@ -640,10 +625,10 @@ def main() -> int:
         }
         print(json.dumps(result, indent=2))
     else:
-        print_report(report, verbose=args.verbose)
+        print_report(report, verbose=verbose)
 
-    return 1 if report.has_issues else 0
+    raise SystemExit(1 if report.has_issues else 0)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

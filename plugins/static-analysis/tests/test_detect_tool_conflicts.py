@@ -150,15 +150,9 @@ class TestCLI:
     """Tests for CLI functionality."""
 
     def test_main_with_nonexistent_path(self) -> None:
-        """Test main with nonexistent path."""
-        import sys
+        """Test main with nonexistent path exits with error."""
+        import pytest
+        from detect_tool_conflicts import app
 
-        from detect_tool_conflicts import main
-
-        old_argv = sys.argv
-        try:
-            sys.argv = ["detect_tool_conflicts.py", "/nonexistent/path"]
-            result = main()
-            assert result == 1
-        finally:
-            sys.argv = old_argv
+        with pytest.raises(SystemExit):
+            app(["/nonexistent/path"])

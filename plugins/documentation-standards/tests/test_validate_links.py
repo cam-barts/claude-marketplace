@@ -45,7 +45,7 @@ See [the docs][1] for more info.
         assert len(links) >= 1
 
     def test_skip_external_links(self, tmp_path: Path) -> None:
-        """Test that external links are identified."""
+        """Test that external links are identified correctly."""
         md_file = tmp_path / "doc.md"
         md_file.write_text("""
 Check [Google](https://google.com) and [local](./local.md).
@@ -73,7 +73,9 @@ class TestLinkValidation:
 
         from validate_links import validate_links
 
-        report = validate_links(md_file.parent)
+        report = validate_links(
+            md_file.parent, check_internal=True, check_external=False
+        )
         assert len(report.broken_links) == 0
 
     def test_broken_internal_link(self, tmp_path: Path) -> None:
@@ -83,7 +85,9 @@ class TestLinkValidation:
 
         from validate_links import validate_links
 
-        report = validate_links(md_file.parent)
+        report = validate_links(
+            md_file.parent, check_internal=True, check_external=False
+        )
         assert len(report.broken_links) == 1
 
     def test_orphaned_files(self, tmp_path: Path) -> None:
@@ -96,7 +100,12 @@ class TestLinkValidation:
 
         from validate_links import validate_links
 
-        report = validate_links(md_file.parent, find_orphans=True)
+        report = validate_links(
+            md_file.parent,
+            check_internal=True,
+            check_external=False,
+            find_orphans=True,
+        )
         orphan_names = [p.name for p in report.orphaned_files]
         assert "orphan.md" in orphan_names
 
@@ -105,15 +114,8 @@ class TestCLI:
     """Tests for CLI functionality."""
 
     def test_main_with_nonexistent_path(self) -> None:
-        """Test main with nonexistent path."""
-        import sys
-
+        """Test main with nonexistent path returns 1 for missing path."""
         from validate_links import main
 
-        old_argv = sys.argv
-        try:
-            sys.argv = ["validate_links.py", "/nonexistent/path"]
-            result = main()
-            assert result == 1
-        finally:
-            sys.argv = old_argv
+        result = main(Path("/nonexistent/path"))
+        assert result == 1

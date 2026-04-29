@@ -4,45 +4,23 @@
 # dependencies = [
 #     "rich>=13.0",
 #     "radon>=6.0",
+#     "cyclopts>=3.0",
+#     "pydantic>=2.0",
 # ]
 # ///
-"""
-Calculate and track code quality metrics for Python projects.
-
-Calculates:
-- Cyclomatic complexity per function/method
-- Maintainability index per module
-- Lines of code (SLOC, comments, blank)
-- Code smells (long methods, deep nesting, etc.)
-
-Features:
-- Quality gate enforcement
-- Historical tracking
-- Trend analysis
-- Multiple output formats
-
-Usage:
-    uv run quality_metrics.py [OPTIONS] PATH
-
-Examples
---------
-    uv run quality_metrics.py src/
-    uv run quality_metrics.py src/ --metrics complexity,loc
-    uv run quality_metrics.py src/ --threshold max_complexity:15 --fail-gates
-    uv run quality_metrics.py src/ --history metrics.json
-"""
+"""Calculate and track code quality metrics for Python projects."""
 
 from __future__ import annotations
 
-import argparse
 import contextlib
 import json
 import sys
-from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from cyclopts import App
+from pydantic import BaseModel, Field
 from radon.complexity import cc_rank, cc_visit
 from radon.metrics import mi_rank, mi_visit
 from radon.raw import analyze
@@ -52,9 +30,10 @@ from rich.table import Table
 
 console = Console()
 
+app = App(help="Calculate cyclomatic complexity, maintainability index, LOC, smells.")
 
-@dataclass
-class FunctionMetrics:
+
+class FunctionMetrics(BaseModel):
     """Metrics for a single function."""
 
     name: str
@@ -66,22 +45,22 @@ class FunctionMetrics:
     length: int = 0
 
 
-@dataclass
-class FileMetrics:
+class FileMetrics(BaseModel):
     """Metrics for a single file."""
 
     path: Path
-    sloc: int = 0  # Source lines of code
-    lloc: int = 0  # Logical lines of code
+    sloc: int = 0
+    lloc: int = 0
     comments: int = 0
     blank: int = 0
     maintainability: float = 0.0
     mi_rank: str = ""
-    functions: list[FunctionMetrics] = field(default_factory=list)
+    functions: list[FunctionMetrics] = Field(default_factory=list)
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
-@dataclass
-class CodeSmell:
+class CodeSmell(BaseModel):
     """A detected code smell."""
 
     smell_type: str
@@ -92,13 +71,12 @@ class CodeSmell:
     message: str
 
 
-@dataclass
-class QualityReport:
+class QualityReport(BaseModel):
     """Complete quality metrics report."""
 
-    files: list[FileMetrics] = field(default_factory=list)
-    smells: list[CodeSmell] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    files: list[FileMetrics] = Field(default_factory=list)
+    smells: list[CodeSmell] = Field(default_factory=list)
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
     @property
     def total_sloc(self) -> int:
@@ -183,7 +161,6 @@ def analyze_file(file_path: Path) -> FileMetrics:
                 rank=cc_rank(result.complexity),
             )
 
-            # Try to get additional info
             if hasattr(result, "endline"):
                 func.length = result.endline - result.lineno + 1
 
@@ -198,15 +175,11 @@ def detect_smells(report: QualityReport) -> list[CodeSmell]:
     """Detect code smells from metrics."""
     smells: list[CodeSmell] = []
 
-    # Thresholds
     MAX_FUNCTION_LENGTH = 50
     MAX_COMPLEXITY = 15
-    _MAX_NESTING = 4  # Would need AST analysis (reserved for future use)
-    _MAX_PARAMETERS = 5  # Reserved for future use
     MIN_MAINTAINABILITY = 50
 
     for file_metrics in report.files:
-        # Low maintainability
         if 0 < file_metrics.maintainability < MIN_MAINTAINABILITY:
             smells.append(
                 CodeSmell(
@@ -221,7 +194,6 @@ def detect_smells(report: QualityReport) -> list[CodeSmell]:
             )
 
         for func in file_metrics.functions:
-            # High complexity
             if func.complexity > MAX_COMPLEXITY:
                 smells.append(
                     CodeSmell(
@@ -234,7 +206,6 @@ def detect_smells(report: QualityReport) -> list[CodeSmell]:
                     ),
                 )
 
-            # Long method
             if func.length > MAX_FUNCTION_LENGTH:
                 smells.append(
                     CodeSmell(
@@ -289,7 +260,6 @@ def analyze_path(path: Path) -> QualityReport:
     files = [path] if path.is_file() else list(path.rglob("*.py"))
 
     for file_path in files:
-        # Skip hidden files, tests, and venvs
         path_str = str(file_path)
         if any(
             skip in path_str
@@ -305,7 +275,6 @@ def analyze_path(path: Path) -> QualityReport:
                 f"[yellow]Warning:[/yellow] Could not analyze {file_path}: {e}"
             )
 
-    # Detect smells
     report.smells = detect_smells(report)
 
     return report
@@ -332,8 +301,6 @@ def save_history(report: QualityReport, history_path: Path) -> None:
     }
 
     history.append(entry)
-
-    # Keep last 100 entries
     history = history[-100:]
 
     history_path.parent.mkdir(parents=True, exist_ok=True)
@@ -346,7 +313,6 @@ def print_report(
     verbose: bool = False,
 ) -> None:
     """Print the quality report."""
-    # Summary
     console.print(Panel("[bold]Code Quality Metrics[/bold]"))
 
     summary_table = Table(title="Summary")
@@ -360,11 +326,9 @@ def print_report(
 
     console.print(summary_table)
 
-    # Complexity
     if report.all_functions:
         console.print("\n[bold]Complexity[/bold]")
 
-        # Rating for average
         avg_cc = report.avg_complexity
         if avg_cc <= 5:
             rating = "[green]Good[/green]"
@@ -376,7 +340,6 @@ def print_report(
         console.print(f"  Average Complexity: {avg_cc:.1f} ({rating})")
         console.print(f"  Max Complexity: {report.max_complexity}")
 
-        # Top complex functions
         top_complex = sorted(report.all_functions, key=lambda f: -f.complexity)[:5]
         if top_complex and top_complex[0].complexity > 5:
             console.print("\n  Most Complex Functions:")
@@ -393,7 +356,6 @@ def print_report(
                     f"{func.file_path}::{func.name}",
                 )
 
-    # Maintainability
     if report.files:
         console.print("\n[bold]Maintainability[/bold]")
 
@@ -410,18 +372,15 @@ def print_report(
         console.print(f"  Average MI: {avg_mi:.1f} ({rating})")
         console.print(f"  Lowest MI: {report.min_maintainability:.1f}")
 
-        # Files needing attention
         low_mi = [f for f in report.files if 0 < f.maintainability < 65]
         if low_mi:
             console.print("\n  Files Needing Attention:")
             for f in sorted(low_mi, key=lambda x: x.maintainability)[:5]:
                 console.print(f"    {f.maintainability:.1f}  {f.path}")
 
-    # Code Smells
     if report.smells:
         console.print("\n[bold yellow]Code Smells[/bold yellow]")
 
-        # Group by type
         by_type: dict[str, list[CodeSmell]] = {}
         for smell in report.smells:
             if smell.smell_type not in by_type:
@@ -435,7 +394,6 @@ def print_report(
                     console.print(f"    • {smell.file_path}: {smell.location}")
                     console.print(f"      {smell.message}")
 
-    # Quality Gates
     if gate_results:
         console.print("\n[bold]Quality Gates[/bold]")
 
@@ -457,68 +415,39 @@ def print_report(
             console.print("\n[bold red]Quality gates failed![/bold red]")
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("path", type=Path, help="Python file or directory to analyze")
-    parser.add_argument(
-        "--metrics",
-        type=str,
-        help="Metrics to calculate (comma-separated): complexity,maintainability,loc",
-    )
-    parser.add_argument(
-        "--threshold",
-        action="append",
-        help="Quality gate threshold (e.g., max_complexity:15)",
-    )
-    parser.add_argument(
-        "--fail-gates",
-        action="store_true",
-        help="Exit with error if quality gates fail",
-    )
-    parser.add_argument(
-        "--history",
-        type=Path,
-        help="Path to history file for tracking over time",
-    )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument(
-        "--output",
-        choices=["text", "json"],
-        default="text",
-        help="Output format",
-    )
-
-    args = parser.parse_args()
-
-    if not args.path.exists():
-        console.print(
-            f"[red]Error:[/red] Path '{args.path}' does not exist", file=sys.stderr
-        )
+@app.default
+def main(
+    path: Path,
+    /,
+    *,
+    _metrics: str | None = None,
+    threshold: list[str] | None = None,
+    fail_gates: bool = False,
+    history: Path | None = None,
+    verbose: bool = False,
+    output: str = "text",
+) -> int:
+    """Calculate cyclomatic complexity, maintainability index, LOC, and code smells."""
+    if not path.exists():
+        print(f"Error: Path '{path}' does not exist", file=sys.stderr)
         return 1
 
-    # Analyze
-    report = analyze_path(args.path)
+    report = analyze_path(path)
 
     # Parse thresholds
     thresholds: dict[str, float] = {}
-    if args.threshold:
-        for t in args.threshold:
+    if threshold:
+        for t in threshold:
             if ":" in t:
                 name, value = t.split(":", 1)
                 thresholds[name] = float(value)
 
-    # Check gates
     gate_results = check_quality_gates(report, thresholds) if thresholds else None
 
-    # Save history
-    if args.history:
-        save_history(report, args.history)
+    if history:
+        save_history(report, history)
 
-    # Output
-    if args.output == "json":
+    if output == "json":
         result: dict[str, Any] = {
             "timestamp": report.timestamp,
             "summary": {
@@ -577,14 +506,13 @@ def main() -> int:
 
         print(json.dumps(result, indent=2))
     else:
-        print_report(report, gate_results, args.verbose)
+        print_report(report, gate_results, verbose)
 
-    # Exit code
-    if args.fail_gates and gate_results and not all(p for _, p, _, _ in gate_results):
+    if fail_gates and gate_results and not all(p for _, p, _, _ in gate_results):
         return 1
 
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

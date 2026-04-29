@@ -12,6 +12,7 @@ These plugins share a common philosophy:
 - **Automation over manual work** - Use tools to fix issues, never iterate manually
 - **Proactive enforcement** - Catch issues early, fail fast, fix faster
 - **Best practices by default** - Opinionated standards based on industry leaders
+- **Lean tooling** - Scripts only where they meaningfully outperform an agent's built-in capabilities (cross-file AST/CST analysis, async I/O, multi-source correlation). Routine grep, edit, and CLI invocations are left to the agent
 
 ## Installation
 
@@ -54,7 +55,7 @@ Enforces documentation quality using rumdl, vale, and Diataxis documentation fra
 
 **Agent:** `docs-enforcer` - Never satisfied until all documentation is error-free
 
-**Version:** 0.1.0 (pre-release)
+**Version:** 0.2.0 (pre-release)
 
 ---
 
@@ -81,33 +82,34 @@ Enforces opinionated pytest testing standards based on Thea Flowers' testing phi
 
 **Agent:** `test-enforcer` - Never satisfied until all tests pass and coverage is maintained
 
-**Version:** 0.1.0 (pre-release)
+**Version:** 0.2.0 (pre-release)
 
 ---
 
 ### static-analysis
 
-Enforces code quality through prek pre-commit hooks and MegaLinter. Actively prevents manual file iteration by recommending automated tools. Never satisfied until all issues are resolved or explicitly suppressed with reasoning.
+Enforces code quality through prek pre-commit hooks, complexity metrics, and dependency auditing. Actively prevents manual file iteration by recommending automated tools. Never satisfied until all issues are resolved or explicitly suppressed with reasoning.
 
 **Key Features:**
 
 - Manual iteration prevention (recommends formatters, linters, refactoring tools)
 - prek pre-commit hooks (faster, lighter alternative to pre-commit)
-- MegaLinter integration for tool discovery
-- GitHub Actions quality gates
+- Cross-config tool conflict detection (overlapping rules across pyproject, ruff.toml, mypy.ini)
+- Quality metrics: cyclomatic complexity, maintainability index, LOC (radon-based)
+- Dependency vulnerability auditing across pyproject + lockfiles
 - Explicit issue resolution (fix/suppress/configure/remove)
 - Autofix prioritization
 
 **Commands:**
 
 - `/quality-check` - Run all quality tools
-- `/quality-setup` - Set up prek and MegaLinter
+- `/quality-setup` - Set up prek hooks and quality tooling
 - `/quality-fix` - Fix quality issues with automation
-- `/quality-discover` - Discover quality issues with MegaLinter
+- `/quality-discover` - Survey configured linters and detect tool conflicts
 
 **Agent:** `quality-enforcer` - Intervenes when manual iteration detected, recommends automation
 
-**Version:** 0.1.0 (pre-release)
+**Version:** 0.2.0 (pre-release)
 
 ## Plugin Philosophy Details
 
@@ -128,7 +130,7 @@ Enforces code quality through prek pre-commit hooks and MegaLinter. Actively pre
 ### static-analysis
 
 - **"Automate everything"** - Never manually iterate when a tool exists
-- **"Discover, then enforce"** - Use MegaLinter to find valuable linters
+- **"Discover, then enforce"** - Survey existing linter config before adding new tooling
 - **"Fail fast, fix faster"** - Catch issues in pre-commit and CI/CD
 - **"Explicit over implicit"** - All ignored issues need documented reasoning
 
@@ -143,10 +145,11 @@ All plugins in this marketplace follow Claude Code best practices:
 - ✅ **Hooks**: Appropriate notification types, secure bash commands
 - ✅ **Commands**: Clear descriptions with usage examples
 - ✅ **Documentation**: Comprehensive READMEs with attribution sections
+- ✅ **Scripts**: Trimmed to those that add value beyond what an agent does natively — AST/CST analysis, async I/O with caching, multi-source correlation. No CLI wrappers, no template generators, no regex passes the agent can do inline
 
 ## Development
 
-This marketplace is versioned at 0.1.0 (pre-release) until pushed to GitHub. All plugins share this version number.
+This marketplace is versioned at 0.2.0 (pre-release) until pushed to GitHub. All plugins share this version number.
 
 ### Project Structure
 

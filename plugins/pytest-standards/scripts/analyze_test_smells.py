@@ -4,6 +4,8 @@
 # dependencies = [
 #     "rich>=13.0",
 #     "libcst>=1.0",
+#     "cyclopts>=3.0",
+#     "pydantic>=2.0",
 # ]
 # ///
 """
@@ -31,20 +33,22 @@ Examples
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
-from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import libcst as cst
+from cyclopts import App
+from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
+
+app = App(help="Detect test anti-patterns and code smells in pytest test files.")
 
 
 class Severity(Enum):
@@ -53,8 +57,7 @@ class Severity(Enum):
     ERROR = "error"
 
 
-@dataclass
-class TestSmell:
+class TestSmell(BaseModel):
     """A detected test smell."""
 
     smell_type: str
@@ -65,18 +68,23 @@ class TestSmell:
     message: str
     suggestion: str
 
+    model_config = {"arbitrary_types_allowed": True}
 
-@dataclass
-class AnalysisReport:
+
+class AnalysisReport(BaseModel):
     """Report of all detected smells."""
 
     files_analyzed: int = 0
     tests_analyzed: int = 0
-    smells: list[TestSmell] = field(default_factory=list)
+    smells: list[TestSmell] = Field(default_factory=list)
 
     @property
     def success(self) -> bool:
         return not any(s.severity == Severity.ERROR for s in self.smells)
+
+    @property
+    def total_tests(self) -> int:
+        return self.tests_analyzed
 
     def smells_by_severity(self, severity: Severity) -> list[TestSmell]:
         return [s for s in self.smells if s.severity == severity]
@@ -317,7 +325,7 @@ class MetadataWrapper(cst.MetadataWrapper):
 
 
 def analyze_file(file_path: Path) -> tuple[int, list[TestSmell]]:
-    """Analyze a single test file."""
+    """Analyze a single test file. Returns (tests_count, smells)."""
     content = file_path.read_text(encoding="utf-8")
 
     try:
@@ -339,8 +347,8 @@ def analyze_file(file_path: Path) -> tuple[int, list[TestSmell]]:
     return detector.tests_count, detector.smells
 
 
-def analyze_path(path: Path, min_severity: Severity = Severity.INFO) -> AnalysisReport:
-    """Analyze a path (file or directory)."""
+def analyze_tests(path: Path, min_severity: Severity = Severity.INFO) -> AnalysisReport:
+    """Analyze a path (file or directory). Returns AnalysisReport."""
     report = AnalysisReport()
 
     if path.is_file():
@@ -367,11 +375,15 @@ def analyze_path(path: Path, min_severity: Severity = Severity.INFO) -> Analysis
                     report.smells.append(smell)
 
         except Exception as e:
-            console.print(
-                f"[red]Error analyzing {file_path}:[/red] {e}", file=sys.stderr
-            )
+            print(f"Error analyzing {file_path}: {e}", file=sys.stderr)
 
     return report
+
+
+# Keep analyze_path as an alias for backward compatibility
+def analyze_path(path: Path, min_severity: Severity = Severity.INFO) -> AnalysisReport:
+    """Analyze a path (file or directory)."""
+    return analyze_tests(path, min_severity)
 
 
 def print_report(report: AnalysisReport, verbose: bool = False) -> None:
@@ -434,38 +446,24 @@ def print_report(report: AnalysisReport, verbose: bool = False) -> None:
         )
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("path", type=Path, help="Test file or directory to analyze")
-    parser.add_argument(
-        "--severity",
-        choices=["info", "warning", "error"],
-        default="info",
-        help="Minimum severity to report (default: info)",
-    )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument(
-        "--output",
-        choices=["text", "json"],
-        default="text",
-        help="Output format",
-    )
+@app.default
+def main(
+    path: Path,
+    /,
+    *,
+    severity: str = "info",
+    verbose: bool = False,
+    output: str = "text",
+) -> None:
+    """Detect test anti-patterns and code smells in pytest test files."""
+    if not path.exists():
+        print(f"Error: Path '{path}' does not exist", file=sys.stderr)
+        raise SystemExit(1)
 
-    args = parser.parse_args()
+    min_severity = Severity(severity)
+    report = analyze_tests(path, min_severity)
 
-    if not args.path.exists():
-        console.print(
-            f"[red]Error:[/red] Path '{args.path}' does not exist", file=sys.stderr
-        )
-        return 1
-
-    min_severity = Severity(args.severity)
-    report = analyze_path(args.path, min_severity)
-
-    if args.output == "json":
+    if output == "json":
         result: dict[str, Any] = {
             "success": report.success,
             "files_analyzed": report.files_analyzed,
@@ -485,10 +483,10 @@ def main() -> int:
         }
         print(json.dumps(result, indent=2))
     else:
-        print_report(report, args.verbose)
+        print_report(report, verbose)
 
-    return 0 if report.success else 1
+    raise SystemExit(0 if report.success else 1)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

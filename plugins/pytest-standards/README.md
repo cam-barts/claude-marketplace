@@ -82,13 +82,13 @@ Analyze code and suggest opportunities for property-based testing with Hypothesi
 
 ## Skills
 
-### `test-writing`
+### test-writing
 
-Automatically invoked when writing tests. Enforces naming conventions, fixture patterns, assertion quality, and promotes Hypothesis.
+Invoked when writing tests or auditing fixtures and smells. Scripts: `analyze_fixtures.py`, `analyze_test_smells.py`.
 
-### `test-coverage`
+### test-analysis
 
-Automatically invoked when code changes. Ensures coverage doesn't drop and suggests tests for uncovered code.
+Invoked when measuring coverage. Scripts: `coverage_analyzer.py`.
 
 ## Hooks
 
@@ -209,7 +209,7 @@ This plugin follows Claude Code best practices:
 ### Plugin Structure
 
 - ✅ Correct directory organization
-- ✅ Semantic versioning (0.1.0 pre-release)
+- ✅ Semantic versioning (0.2.0 pre-release)
 - ✅ Comprehensive documentation
 
 ## Attribution & Credits

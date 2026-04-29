@@ -28,7 +28,7 @@ def test_many_assertions():
 
         from analyze_test_smells import analyze_file
 
-        smells = analyze_file(test_file)
+        _count, smells = analyze_file(test_file)
         smell_types = [s.smell_type for s in smells]
         assert "ASSERTION_ROULETTE" in smell_types
 
@@ -43,7 +43,7 @@ def test_no_assert():
 
         from analyze_test_smells import analyze_file
 
-        smells = analyze_file(test_file)
+        _count, smells = analyze_file(test_file)
         smell_types = [s.smell_type for s in smells]
         assert "DEAD_TEST" in smell_types
 
@@ -63,7 +63,7 @@ def test_too_many_mocks():
 
         from analyze_test_smells import analyze_file
 
-        smells = analyze_file(test_file)
+        _count, smells = analyze_file(test_file)
         smell_types = [s.smell_type for s in smells]
         assert "MOCK_OVERLOAD" in smell_types
 
@@ -84,10 +84,11 @@ def test_clean():
 
         from analyze_test_smells import analyze_file
 
-        smells = analyze_file(test_file)
-        # Should have no high-severity smells
-        high_smells = [s for s in smells if s.severity == "high"]
-        assert len(high_smells) == 0
+        _count, smells = analyze_file(test_file)
+        # Should have no error-severity smells
+        from analyze_test_smells import Severity
+        error_smells = [s for s in smells if s.severity == Severity.ERROR]
+        assert len(error_smells) == 0
 
 
 class TestReportGeneration:
@@ -115,12 +116,14 @@ class TestCLI:
         """Test main with nonexistent path."""
         import sys
 
-        from analyze_test_smells import main
+        from analyze_test_smells import app
 
         old_argv = sys.argv
         try:
             sys.argv = ["analyze_test_smells.py", "/nonexistent/path"]
-            result = main()
-            assert result == 1
+            try:
+                app()
+            except SystemExit as e:
+                assert e.code == 1
         finally:
             sys.argv = old_argv

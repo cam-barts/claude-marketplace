@@ -2,6 +2,8 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
+#     "cyclopts>=3.0",
+#     "pydantic>=2.0",
 #     "docstring-parser>=0.16",
 #     "rich>=13.0",
 # ]
@@ -29,34 +31,34 @@ Examples
 
 from __future__ import annotations
 
-import argparse
 import ast
 import json
 import re
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import docstring_parser
+from cyclopts import App
 from docstring_parser import DocstringStyle
+from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
+app = App(help="Compare Python docstrings with external documentation")
 
 STYLE_MAP = {
     "google": DocstringStyle.GOOGLE,
-    "numpy": DocstringStyle.NUMPY,
-    "sphinx": DocstringStyle.SPHINX,
+    "numpy": DocstringStyle.NUMPYDOC,
+    "sphinx": DocstringStyle.REST,
     "epydoc": DocstringStyle.EPYDOC,
     "auto": DocstringStyle.AUTO,
 }
 
 
-@dataclass
-class FunctionDoc:
+class FunctionDoc(BaseModel):
     """Extracted documentation for a function."""
 
     name: str
@@ -66,24 +68,26 @@ class FunctionDoc:
     signature: str
     docstring: str | None
     description: str | None
-    params: dict[str, str] = field(default_factory=dict)
+    params: dict[str, str] = Field(default_factory=dict)
     returns: str | None = None
-    raises: list[str] = field(default_factory=list)
+    raises: list[str] = Field(default_factory=list)
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
-@dataclass
-class DocReference:
+class DocReference(BaseModel):
     """Reference to a function in external documentation."""
 
     name: str
     file_path: Path
     line_number: int
     description: str
-    params: dict[str, str] = field(default_factory=dict)
+    params: dict[str, str] = Field(default_factory=dict)
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
-@dataclass
-class SyncIssue:
+class SyncIssue(BaseModel):
     """A synchronization issue between code and docs."""
 
     function: str
@@ -93,13 +97,30 @@ class SyncIssue:
     doc_location: str | None = None
 
 
-@dataclass
-class SyncReport:
+class DocCompareReport(BaseModel):
+    """Report of doc comparison results."""
+
+    missing_from_docs: list[str] = Field(default_factory=list)
+    missing_from_code: list[str] = Field(default_factory=list)
+    outdated: list[str] = Field(default_factory=list)
+    mismatches: list[str] = Field(default_factory=list)
+    issues: list[SyncIssue] = Field(default_factory=list)
+
+
+class SyncUpdateSuggestion(BaseModel):
+    """A suggestion to update documentation."""
+
+    function_name: str
+    suggestion: str
+    details: str
+
+
+class SyncReport(BaseModel):
     """Report of synchronization between code and documentation."""
 
-    functions: list[FunctionDoc] = field(default_factory=list)
-    doc_refs: list[DocReference] = field(default_factory=list)
-    issues: list[SyncIssue] = field(default_factory=list)
+    functions: list[FunctionDoc] = Field(default_factory=list)
+    doc_refs: list[DocReference] = Field(default_factory=list)
+    issues: list[SyncIssue] = Field(default_factory=list)
 
     @property
     def has_issues(self) -> bool:
@@ -124,11 +145,9 @@ def extract_functions_from_file(
 
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # Skip private functions
             if node.name.startswith("_") and not node.name.startswith("__"):
                 continue
 
-            # Get signature
             args = []
             for arg in node.args.args:
                 annotation = ""
@@ -142,7 +161,6 @@ def extract_functions_from_file(
 
             signature = f"def {node.name}({', '.join(args)}){returns}"
 
-            # Parse docstring
             docstring = ast.get_docstring(node)
             description = None
             params: dict[str, str] = {}
@@ -198,7 +216,6 @@ def extract_functions_from_source(
         files = list(path.rglob("*.py"))
 
     for file_path in files:
-        # Skip hidden and cache directories
         if any(
             part.startswith(".") or part == "__pycache__" for part in file_path.parts
         ):
@@ -218,14 +235,11 @@ def extract_doc_references(path: Path) -> list[DocReference]:
     else:
         files = list(path.rglob("*.md")) + list(path.rglob("*.rst"))
 
-    # Pattern for function documentation in markdown
-    # Matches headers like: ## function_name, ### `function_name`, #### function_name()
     func_pattern = re.compile(
         r"^#{2,4}\s+`?(\w+)`?\s*(?:\([^)]*\))?\s*$",
         re.MULTILINE,
     )
 
-    # Pattern for parameter documentation
     param_pattern = re.compile(r"^[-*]\s+`?(\w+)`?\s*[-:]\s*(.+)$", re.MULTILINE)
 
     for file_path in files:
@@ -238,7 +252,6 @@ def extract_doc_references(path: Path) -> list[DocReference]:
                 if match:
                     func_name = match.group(1)
 
-                    # Get description (next non-empty line that's not a header)
                     description = ""
                     for j in range(i + 1, min(i + 10, len(lines))):
                         next_line = lines[j].strip()
@@ -246,7 +259,6 @@ def extract_doc_references(path: Path) -> list[DocReference]:
                             description = next_line
                             break
 
-                    # Find parameters in the following section
                     params: dict[str, str] = {}
                     section_end = min(i + 50, len(lines))
                     for j in range(i + 1, section_end):
@@ -273,11 +285,16 @@ def extract_doc_references(path: Path) -> list[DocReference]:
 
 
 def compare_docs(
-    functions: list[FunctionDoc],
-    doc_refs: list[DocReference],
-) -> list[SyncIssue]:
-    """Compare code documentation with external documentation."""
-    issues: list[SyncIssue] = []
+    source: Path,
+    docs: Path,
+    style: str = "auto",
+) -> DocCompareReport:
+    """Compare source code docstrings with external documentation."""
+    doc_style = STYLE_MAP.get(style, DocstringStyle.AUTO)
+    report = DocCompareReport()
+
+    functions = extract_functions_from_source(source, doc_style)
+    doc_refs = extract_doc_references(docs)
 
     func_by_name = {f.name: f for f in functions}
     doc_by_name = {d.name: d for d in doc_refs}
@@ -285,7 +302,8 @@ def compare_docs(
     # Check for missing documentation
     for name, func in func_by_name.items():
         if name not in doc_by_name:
-            issues.append(
+            report.missing_from_docs.append(name)
+            report.issues.append(
                 SyncIssue(
                     function=name,
                     issue_type="missing_doc",
@@ -295,15 +313,14 @@ def compare_docs(
             )
         else:
             doc = doc_by_name[name]
-
-            # Compare parameters
             code_params = set(func.params.keys())
             doc_params = set(doc.params.keys())
 
             missing_in_docs = code_params - doc_params
             if missing_in_docs:
                 missing_str = ", ".join(missing_in_docs)
-                issues.append(
+                report.mismatches.append(name)
+                report.issues.append(
                     SyncIssue(
                         function=name,
                         issue_type="param_mismatch",
@@ -316,7 +333,8 @@ def compare_docs(
             extra_in_docs = doc_params - code_params
             if extra_in_docs:
                 extra_str = ", ".join(extra_in_docs)
-                issues.append(
+                report.outdated.append(name)
+                report.issues.append(
                     SyncIssue(
                         function=name,
                         issue_type="param_mismatch",
@@ -329,7 +347,8 @@ def compare_docs(
     # Check for documented functions not in code
     for name, doc in doc_by_name.items():
         if name not in func_by_name:
-            issues.append(
+            report.missing_from_code.append(name)
+            report.issues.append(
                 SyncIssue(
                     function=name,
                     issue_type="missing_code",
@@ -338,7 +357,61 @@ def compare_docs(
                 ),
             )
 
-    return issues
+    return report
+
+
+def extract_docstrings(file_path: Path) -> dict[str, str]:
+    """Extract all docstrings from a Python file, keyed by name."""
+    result: dict[str, str] = {}
+    try:
+        content = file_path.read_text(encoding="utf-8")
+        tree = ast.parse(content, filename=str(file_path))
+    except Exception:
+        return result
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            ds = ast.get_docstring(node)
+            if ds:
+                result[node.name] = ds
+
+    return result
+
+
+def suggest_updates(
+    file_path: Path,
+    docs_dir: Path | None,
+) -> list[SyncUpdateSuggestion]:
+    """Suggest documentation updates for functions in a file."""
+    suggestions: list[SyncUpdateSuggestion] = []
+    docstrings = extract_docstrings(file_path)
+
+    if docs_dir is None:
+        # Suggest docs for all functions
+        for name, ds in docstrings.items():
+            suggestions.append(
+                SyncUpdateSuggestion(
+                    function_name=name,
+                    suggestion="Add to external documentation",
+                    details=ds.split("\n")[0],
+                )
+            )
+        return suggestions
+
+    doc_refs = extract_doc_references(docs_dir)
+    doc_names = {d.name for d in doc_refs}
+
+    for name, ds in docstrings.items():
+        if name not in doc_names:
+            suggestions.append(
+                SyncUpdateSuggestion(
+                    function_name=name,
+                    suggestion="Add to external documentation",
+                    details=ds.split("\n")[0],
+                )
+            )
+
+    return suggestions
 
 
 def sync_docstrings(
@@ -349,14 +422,67 @@ def sync_docstrings(
     """Compare docstrings with external documentation."""
     doc_style = STYLE_MAP.get(style, DocstringStyle.AUTO)
 
-    # Extract from source code
     functions = extract_functions_from_source(source_path, doc_style)
-
-    # Extract from documentation
     doc_refs = extract_doc_references(docs_path)
 
-    # Compare
-    issues = compare_docs(functions, doc_refs)
+    func_by_name = {f.name: f for f in functions}
+    doc_by_name = {d.name: d for d in doc_refs}
+
+    issues: list[SyncIssue] = []
+
+    for name, func in func_by_name.items():
+        if name not in doc_by_name:
+            issues.append(
+                SyncIssue(
+                    function=name,
+                    issue_type="missing_doc",
+                    details=f"Function '{name}' is not documented",
+                    code_location=f"{func.file_path}:{func.line_number}",
+                ),
+            )
+        else:
+            doc = doc_by_name[name]
+            code_params = set(func.params.keys())
+            doc_params = set(doc.params.keys())
+
+            missing_in_docs = code_params - doc_params
+            if missing_in_docs:
+                issues.append(
+                    SyncIssue(
+                        function=name,
+                        issue_type="param_mismatch",
+                        details=(
+                            f"Parameters not documented: {', '.join(missing_in_docs)}"
+                        ),
+                        code_location=f"{func.file_path}:{func.line_number}",
+                        doc_location=f"{doc.file_path}:{doc.line_number}",
+                    ),
+                )
+
+            extra_in_docs = doc_params - code_params
+            if extra_in_docs:
+                issues.append(
+                    SyncIssue(
+                        function=name,
+                        issue_type="param_mismatch",
+                        details=(
+                            f"Documented params not in code: {', '.join(extra_in_docs)}"
+                        ),
+                        code_location=f"{func.file_path}:{func.line_number}",
+                        doc_location=f"{doc.file_path}:{doc.line_number}",
+                    ),
+                )
+
+    for name, doc in doc_by_name.items():
+        if name not in func_by_name:
+            issues.append(
+                SyncIssue(
+                    function=name,
+                    issue_type="missing_code",
+                    details=f"Documented function '{name}' not found in code",
+                    doc_location=f"{doc.file_path}:{doc.line_number}",
+                ),
+            )
 
     return SyncReport(
         functions=functions,
@@ -369,7 +495,6 @@ def print_report(report: SyncReport, verbose: bool = False) -> None:
     """Print the synchronization report."""
     console.print(Panel("[bold]Docstring Sync Report[/bold]"))
 
-    # Summary
     summary_table = Table(title="Summary")
     summary_table.add_column("Metric", style="cyan")
     summary_table.add_column("Count", style="green")
@@ -389,7 +514,6 @@ def print_report(report: SyncReport, verbose: bool = False) -> None:
             has_docstring = "✓" if func.docstring else "✗"
             console.print(f"  [{has_docstring}] {func.module}.{func.name}")
 
-    # Issues by type
     if report.issues:
         by_type: dict[str, list[SyncIssue]] = {}
         for issue in report.issues:
@@ -428,61 +552,37 @@ def print_report(report: SyncReport, verbose: bool = False) -> None:
                     console.print(f"    [dim]Docs: {issue.doc_location}[/dim]")
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("source", type=Path, help="Source code directory")
-    parser.add_argument("docs", type=Path, help="Documentation directory")
-    parser.add_argument(
-        "--style",
-        choices=["google", "numpy", "sphinx", "epydoc", "auto"],
-        default="auto",
-        help="Docstring style (default: auto)",
-    )
-    parser.add_argument(
-        "--update",
-        action="store_true",
-        help="Update docs from docstrings (with backup)",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would change without modifying",
-    )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument(
-        "--output",
-        choices=["text", "json"],
-        default="text",
-        help="Output format",
-    )
-
-    args = parser.parse_args()
-
-    if not args.source.exists():
+@app.default
+def main(
+    source: Path,
+    docs: Path,
+    /,
+    *,
+    style: str = "auto",
+    update: bool = False,
+    _dry_run: bool = False,
+    verbose: bool = False,
+    output: str = "text",
+) -> int:
+    """Compare Python docstrings with external documentation."""
+    if not source.exists():
         console.print(
-            f"[red]Error:[/red] Source path '{args.source}' does not exist",
-            file=sys.stderr,
+            f"[red]Error:[/red] Source path '{source}' does not exist",
         )
         return 1
 
-    if not args.docs.exists():
+    if not docs.exists():
         console.print(
-            f"[red]Error:[/red] Docs path '{args.docs}' does not exist",
-            file=sys.stderr,
+            f"[red]Error:[/red] Docs path '{docs}' does not exist",
         )
         return 1
 
-    if args.update:
+    if update:
         console.print("[yellow]Warning:[/yellow] --update is not yet implemented")
 
-    # Run analysis
-    report = sync_docstrings(args.source, args.docs, args.style)
+    report = sync_docstrings(source, docs, style)
 
-    # Output results
-    if args.output == "json":
+    if output == "json":
         result: dict[str, Any] = {
             "summary": {
                 "functions_in_code": len(report.functions),
@@ -513,10 +613,10 @@ def main() -> int:
         }
         print(json.dumps(result, indent=2))
     else:
-        print_report(report, verbose=args.verbose)
+        print_report(report, verbose=verbose)
 
     return 1 if report.has_issues else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(app())

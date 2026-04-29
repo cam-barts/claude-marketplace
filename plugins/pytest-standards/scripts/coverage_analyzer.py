@@ -4,6 +4,8 @@
 # dependencies = [
 #     "rich>=13.0",
 #     "radon>=6.0",
+#     "cyclopts>=3.0",
+#     "pydantic>=2.0",
 # ]
 # ///
 """
@@ -35,15 +37,15 @@ Examples
 
 from __future__ import annotations
 
-import argparse
 import contextlib
 import json
 import sys
-from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from cyclopts import App
+from pydantic import BaseModel, Field
 from radon.complexity import cc_visit
 from rich.console import Console
 from rich.panel import Panel
@@ -52,17 +54,25 @@ from rich.table import Table
 
 console = Console()
 
+app = App(help="Advanced coverage analysis beyond line coverage.")
 
-@dataclass
-class FileCoverage:
+
+class FileCoverage(BaseModel):
     """Coverage data for a single file."""
 
     path: str
     covered_lines: set[int]
     missing_lines: set[int]
     excluded_lines: set[int]
-    covered_branches: list[tuple[int, int]] = field(default_factory=list)
-    missing_branches: list[tuple[int, int]] = field(default_factory=list)
+    covered_branches: list[tuple[int, int]] = Field(default_factory=list)
+    missing_branches: list[tuple[int, int]] = Field(default_factory=list)
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    @property
+    def name(self) -> str:
+        """Return the filename component of the path."""
+        return Path(self.path).name
 
     @property
     def total_lines(self) -> int:
@@ -87,8 +97,7 @@ class FileCoverage:
         return len(self.covered_branches) / total * 100
 
 
-@dataclass
-class FunctionCoverage:
+class FunctionCoverage(BaseModel):
     """Coverage data for a function with complexity."""
 
     name: str
@@ -113,13 +122,12 @@ class FunctionCoverage:
         return self.complexity * uncovered_pct / 100
 
 
-@dataclass
-class CoverageReport:
+class CoverageReport(BaseModel):
     """Complete coverage analysis report."""
 
-    files: list[FileCoverage] = field(default_factory=list)
-    functions: list[FunctionCoverage] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    files: list[FileCoverage] = Field(default_factory=list)
+    functions: list[FunctionCoverage] = Field(default_factory=list)
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
     @property
     def total_line_coverage(self) -> float:
@@ -128,6 +136,11 @@ class CoverageReport:
         if total_lines == 0:
             return 100.0
         return total_covered / total_lines * 100
+
+    @property
+    def total_coverage(self) -> float:
+        """Alias for total_line_coverage."""
+        return self.total_line_coverage
 
     @property
     def total_branch_coverage(self) -> float:
@@ -188,6 +201,18 @@ def parse_coverage_json(coverage_path: Path) -> CoverageReport:
         report.files.append(file_cov)
 
     return report
+
+
+def prioritize_files(files: list[FileCoverage]) -> list[FileCoverage]:
+    """Sort files by coverage ascending (lowest coverage = highest priority)."""
+    return sorted(files, key=lambda f: f.line_coverage)
+
+
+def files_below_threshold(
+    files: list[FileCoverage], threshold: float = 80.0
+) -> list[FileCoverage]:
+    """Return files with line coverage below the given threshold."""
+    return [f for f in files if f.line_coverage < threshold]
 
 
 def analyze_function_coverage(
@@ -419,7 +444,7 @@ def print_report(
     # Test suggestions
     if suggestions:
         console.print("\n[bold blue]Suggested Functions to Test[/bold blue]")
-        console.print("  (Prioritized by complexity × uncovered %)\n")
+        console.print("  (Prioritized by complexity x uncovered %)\n")
 
         for func, reason in suggestions:
             console.print(f"  [cyan]{func.file_path}[/cyan]::{func.name}")
@@ -429,84 +454,45 @@ def print_report(
             console.print(f"    [dim]{reason}[/dim]\n")
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "coverage_file",
-        type=Path,
-        help="Path to coverage.json file",
-    )
-    parser.add_argument(
-        "--branch",
-        action="store_true",
-        help="Include branch coverage analysis",
-    )
-    parser.add_argument(
-        "--complexity",
-        action="store_true",
-        help="Weight coverage by cyclomatic complexity",
-    )
-    parser.add_argument(
-        "--suggest",
-        type=int,
-        metavar="N",
-        help="Suggest top N functions to test",
-    )
-    parser.add_argument(
-        "--source",
-        type=Path,
-        help="Source directory for complexity analysis",
-    )
-    parser.add_argument(
-        "--history",
-        type=Path,
-        help="Path to history file for trend tracking",
-    )
-    parser.add_argument(
-        "--show-trends",
-        action="store_true",
-        help="Show coverage trends from history",
-    )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument(
-        "--output",
-        choices=["text", "json"],
-        default="text",
-        help="Output format",
-    )
-
-    args = parser.parse_args()
-
-    if not args.coverage_file.exists():
-        console.print(
-            f"[red]Error:[/red] Coverage file '{args.coverage_file}' not found",
-            file=sys.stderr,
-        )
-        return 1
+@app.default
+def main(
+    coverage_file: Path,
+    /,
+    *,
+    branch: bool = False,
+    complexity: bool = False,
+    suggest: int | None = None,
+    source: Path | None = None,
+    history: Path | None = None,
+    show_trends_flag: bool = False,
+    verbose: bool = False,
+    output: str = "text",
+) -> None:
+    """Advanced coverage analysis beyond line coverage."""
+    if not coverage_file.exists():
+        print(f"Error: Coverage file '{coverage_file}' not found", file=sys.stderr)
+        raise SystemExit(1)
 
     # Parse coverage data
-    report = parse_coverage_json(args.coverage_file)
+    report = parse_coverage_json(coverage_file)
 
     # Function-level analysis with complexity
     suggestions = None
-    if args.complexity or args.suggest:
+    if complexity or suggest:
         with Progress(console=console, transient=True) as progress:
             task = progress.add_task("Analyzing function coverage...", total=None)
-            report.functions = analyze_function_coverage(report, args.source)
+            report.functions = analyze_function_coverage(report, source)
             progress.update(task, completed=True)
 
-        if args.suggest:
-            suggestions = suggest_tests(report.functions, args.suggest)
+        if suggest:
+            suggestions = suggest_tests(report.functions, suggest)
 
     # Save history
-    if args.history:
-        save_history(report, args.history)
+    if history:
+        save_history(report, history)
 
     # Output
-    if args.output == "json":
+    if output == "json":
         result: dict[str, Any] = {
             "timestamp": report.timestamp,
             "summary": {
@@ -547,17 +533,17 @@ def main() -> int:
 
         print(json.dumps(result, indent=2))
     else:
-        print_report(report, args.branch, suggestions, args.verbose)
+        print_report(report, branch, suggestions, verbose)
 
-        if args.show_trends and args.history:
-            show_trends(args.history)
+        if show_trends_flag and history:
+            show_trends(history)
 
     # Return non-zero if coverage is low
     if report.total_line_coverage < 60:
-        return 1
+        raise SystemExit(1)
 
-    return 0
+    raise SystemExit(0)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

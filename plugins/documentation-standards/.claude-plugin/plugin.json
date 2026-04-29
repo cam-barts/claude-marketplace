@@ -1,6 +1,6 @@
 {
   "name": "documentation-standards",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Enforces documentation standards using rumdl, vale, and Diataxis documentation types. Ensures all documentation is high-quality, consistent, and error-free.",
   "author": {
     "name": "cam-barts"

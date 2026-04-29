@@ -94,13 +94,13 @@ Use MegaLinter to discover quality issues and recommend tools for the project.
 
 ## Skills
 
-### `quality-enforcement`
+### quality-enforcement
 
-Automatically invoked when working on code. Runs static analysis, prevents manual iteration, recommends automation tools.
+Invoked when enforcing quality, measuring metrics, or auditing dependencies. Scripts: `quality_metrics.py`, `dependency_analyzer.py`.
 
-### `tool-discovery`
+### quality-tooling
 
-Automatically invoked when analyzing quality needs. Uses MegaLinter to discover and recommend appropriate tools.
+Invoked when detecting cross-config tool conflicts. Scripts: `detect_tool_conflicts.py`.
 
 ## Hooks
 
