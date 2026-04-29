@@ -28,6 +28,7 @@ Or install individual plugins:
 /plugin install documentation-standards@cam-marketplace
 /plugin install pytest-standards@cam-marketplace
 /plugin install static-analysis@cam-marketplace
+/plugin install silverbullet@cam-marketplace
 ```
 
 ## Plugins
@@ -108,6 +109,23 @@ Enforces code quality through prek pre-commit hooks, complexity metrics, and dep
 - `/quality-discover` - Survey configured linters and detect tool conflicts
 
 **Agent:** `quality-enforcer` - Intervenes when manual iteration detected, recommends automation
+
+**Version:** 0.2.0 (pre-release)
+
+---
+
+### silverbullet
+
+Skill bundle for working with Cam's SilverBullet knowledge base. Encodes paths, the server URL, and Lua function names — highly personal; useful as a reference for similar setups but not turnkey for others.
+
+**Key Features:**
+
+- Decision table for picking between `sb`, `zk`, and direct file edits
+- Sync workflow between the Docker volume and local working copy
+- Space Lua evaluation and SilverBullet object index queries
+- `zk` search, link traversal, tag management, graph analysis
+
+**Skill:** `silverbullet` - Triggers on SilverBullet, wikilinks, backlinks, `sb`/`zk` CLI usage, or references to the user's notes/wiki/knowledge base
 
 **Version:** 0.2.0 (pre-release)
 

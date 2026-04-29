@@ -61,6 +61,21 @@
         "automation",
         "ci-cd"
       ]
+    },
+    {
+      "name": "silverbullet",
+      "source": "./plugins/silverbullet",
+      "version": "0.2.0",
+      "description": "Skill for working with Cam's SilverBullet knowledge base — wikilinks, backlinks, the sb and zk CLIs, and Space Lua. Highly personal: paths and Lua functions are specific to Cam's setup.",
+      "keywords": [
+        "silverbullet",
+        "knowledge-base",
+        "notes",
+        "wiki",
+        "zk",
+        "wikilinks",
+        "personal"
+      ]
     }
   ]
 }
