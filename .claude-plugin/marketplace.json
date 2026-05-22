@@ -5,10 +5,7 @@
   "owner": {
     "name": "cam-barts"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/cam-barts/claude-marketplace"
-  },
+  "repository": "https://github.com/cam-barts/claude-marketplace",
   "plugins": [
     {
       "name": "documentation-standards",
