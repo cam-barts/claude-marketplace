@@ -1,6 +1,5 @@
 ---
 description: Run all tests with coverage and ensure they pass
-documentation_type: how-to
 ---
 
 Run the complete test suite with coverage reporting and enforce zero-failure policy.

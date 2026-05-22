@@ -1,6 +1,5 @@
 ---
 description: Suggest Hypothesis property-based tests
-documentation_type: how-to
 ---
 
 Analyze codebase and suggest opportunities for property-based testing with Hypothesis.

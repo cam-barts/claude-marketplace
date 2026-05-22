@@ -1,6 +1,5 @@
 ---
 description: Run all quality checks and report issues
-documentation_type: how-to
 ---
 
 Run all configured static analysis tools and report issues.

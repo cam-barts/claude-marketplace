@@ -1,6 +1,5 @@
 ---
 description: Check and add proper attribution for external sources
-documentation_type: how-to
 ---
 
 Ensure all documentation properly credits sources of inspiration, borrowed content, and external resources.

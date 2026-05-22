@@ -1,9 +1,14 @@
 {
   "name": "silverbullet",
   "version": "0.2.0",
-  "description": "Skill for working with Cam's SilverBullet knowledge base — wikilinks, backlinks, the sb and zk CLIs, and Space Lua. Highly personal: paths and Lua functions are specific to Cam's setup.",
+  "description": "Reference manual for Cam's SilverBullet knowledge base — the sb and zk CLIs, Space Lua, wikilinks, backlinks. Pair with silverbullet-workflow for the action layer. Highly personal: paths and Lua functions are specific to Cam's setup.",
   "author": {
     "name": "cam-barts"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cam-barts/claude-marketplace"
   },
   "keywords": [
     "silverbullet",

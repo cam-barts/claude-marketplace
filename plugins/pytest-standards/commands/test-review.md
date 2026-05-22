@@ -1,6 +1,5 @@
 ---
 description: Review test quality and suggest improvements
-documentation_type: how-to
 ---
 
 Review existing tests for adherence to pytest best practices.

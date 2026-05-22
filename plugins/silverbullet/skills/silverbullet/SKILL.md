@@ -6,15 +6,16 @@ description: |
   wikilinks, backlinks, or aspiring notes; the zk CLI for searching, tagging, link analysis,
   or graph traversal; the sb CLI for querying, syncing, or running Space Lua; note organization,
   tag management, or knowledge graph analysis; the Readwise or Zotero integrations in SB;
-  or any mention of ~/silverbullet, "my notes", "my knowledge base", or "my wiki". Also trigger when the user asks about
+  or any mention of ~/silverbullet, bullet.coder.cam,
+  "my notes", "my knowledge base", or "my wiki". Also trigger when the user asks about
   links between notes, orphan pages, note connections, or wants to search/filter their notes.
 ---
 
 # SilverBullet Knowledge Base
 
-Cam's knowledge base runs on SilverBullet v2 with Space Lua scripting. There are two key
-directories, two CLI tools, and a link-fixing script. This skill tells you when and how
-to use each one.
+Cam's knowledge base runs on SilverBullet v2 with Space Lua scripting. Two CLI tools
+and a link-fixing script operate against the space at `~/silverbullet/`. This skill
+tells you when and how to use each one.
 
 ## Quick Reference: Which Tool for What
 
@@ -45,7 +46,7 @@ export PATH="$HOME/.local/bin:$PATH"
 ## The `sb` CLI
 
 Talks directly to the SilverBullet server's runtime API. Use it for syncing, evaluating
-Lua, and querying the object index. Details can be found at <https://github.com/cam-barts/sb-cli>
+Lua, and querying the object index.
 
 ### Syncing
 
@@ -79,17 +80,27 @@ sb query 'from index.tag "tag" limit 5'
 
 ### Troubleshooting sb
 
-If `sb lua` or `sb query` returns a 500 error, the Space Lua runtime may be overloaded
-from a recent reload. Wait a few seconds and retry with `sb lua 'return "ok"'` to check.
-If the server stays down, fall back to `zk` for search tasks — zk reads the filesystem
-directly and doesn't depend on the SB server being healthy.
+**`sb lua` takes an expression, NOT a statement block.** Pass a bare expression:
+`sb lua '1+1'` returns `2`; `sb lua '"ok"'` returns `"ok"`. Do **not** prefix with
+`return` — `sb lua 'return 1+1'` returns HTTP 500 because top-level `return` isn't
+valid Space Lua. (Cam called this out 2026-05-21 — earlier guidance here suggested
+`sb lua 'return "ok"'` as a health probe, which was the source of multiple
+false-positive "headless-Chrome bridge wedged" reports. The web UI's "Run Lua script"
+command has the same expression-only behavior.)
+
+If `sb lua` or `sb query` returns a 500 error AFTER you've verified the syntax is
+expression-form, the Space Lua runtime may be overloaded from a recent reload. Wait
+a few seconds and retry with `sb lua '"ok"'`. A different error code,
+`bridge_unavailable`, indicates a genuine headless-Chrome wedge — distinct from a
+malformed-expression 500. If the server stays down on well-formed input, fall back
+to `zk` for search tasks — zk reads the filesystem directly.
 
 ## The `zk` CLI
 
 A command-line tool that indexes the SilverBullet space and provides fast search, link
 traversal, tag management, and graph analysis. It reads from `~/silverbullet/`
 (set via `ZK_NOTEBOOK_DIR`). The config lives at `~/.config/zk/config.toml` and
-excludes `Library/` from indexing. Information can be found for this CLI at <https://github.com/zk-org/zk>.
+excludes `Library/` from indexing.
 
 ### Reindexing
 
@@ -265,7 +276,8 @@ Cam's space uses a lean tag system. The meaningful tags are:
 - **Content type:** `bias`, `fallacy`, `propaganda`, `rhetoric`, `concept`, `quote`, `person`, `project`
 - **Source type:** `readwise`, `readwise/articles`, `readwise/books`, `zotero`, `zotero/journalArticle`, `zotero/book`
 - **Meta:** `meta`, `meta/template/page`, `meta/template/slash`, `meta/api`
-    - Typically, you would use `meta` tags for library files or system configuration, anything that would be considered a content note should not have the meta tag.
+- **State:** `state/0` (zettelkasten processing state), `excalidraw`, `clippings`, `technique-map`
+- **Utility:** `todo`, `wishlist`, `query`, `jira`, `reference`
 
 Tags are for categorization, not entity encoding. Use wikilinks for relationships between
 specific notes. Don't create one-off tags — if only one note would have it, it's not a tag.
@@ -283,9 +295,8 @@ Query them with `sb query` or in Space Lua with `query[[from index.tag "highligh
 
 Things that have tripped up agents before — avoid repeating these:
 
-1. **Editing `~/docker_services/silverbullet/space/` directly without syncing.** The server
-   reads from the Docker mount, but `zk` reads from `~/silverbullet/`. If you edit one
-   without syncing, they diverge. Always use `~/silverbullet/` + `sb sync`.
+1. **Forgetting to `sb sync` after edits.** Edits to `~/silverbullet/` don't reach the
+   server until you sync. If you skip the sync, the server's view drifts from local.
 
 2. **Forgetting environment variables.** Every new shell session needs `ZK_NOTEBOOK_DIR`
    and `PATH` set. Without them, `zk` won't find the notebook and `sb` won't be on PATH.

@@ -5,6 +5,11 @@
   "author": {
     "name": "cam-barts"
   },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cam-barts/claude-marketplace"
+  },
   "keywords": [
     "static-analysis",
     "code-quality",

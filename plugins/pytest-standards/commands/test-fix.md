@@ -1,6 +1,5 @@
 ---
 description: Fix failing tests and improve coverage
-documentation_type: how-to
 ---
 
 Invoke the test-enforcer agent to fix all failing tests and improve coverage.

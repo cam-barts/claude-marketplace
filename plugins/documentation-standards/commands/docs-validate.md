@@ -1,6 +1,5 @@
 ---
 description: Comprehensive documentation validation with zero-error enforcement
-documentation_type: how-to
 ---
 
 Perform comprehensive documentation validation and DO NOT stop until all issues are resolved.

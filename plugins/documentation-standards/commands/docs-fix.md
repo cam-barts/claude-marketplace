@@ -1,6 +1,5 @@
 ---
 description: Auto-fix documentation issues where possible
-documentation_type: how-to
 ---
 
 Automatically fix documentation issues that can be corrected programmatically.

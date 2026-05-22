@@ -1,6 +1,5 @@
 ---
 description: Set up quality tools for the repository
-documentation_type: how-to
 ---
 
 Analyze repository and set up appropriate quality tools.

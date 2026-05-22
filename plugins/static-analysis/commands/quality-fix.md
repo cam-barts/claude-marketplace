@@ -1,6 +1,5 @@
 ---
 description: Fix quality issues automatically where possible
-documentation_type: how-to
 ---
 
 Invoke quality-enforcer agent to fix all quality issues.

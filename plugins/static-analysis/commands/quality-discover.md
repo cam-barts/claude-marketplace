@@ -1,6 +1,5 @@
 ---
 description: Discover quality issues and recommend tools using MegaLinter
-documentation_type: how-to
 ---
 
 Use MegaLinter to discover quality issues and recommend appropriate tools.

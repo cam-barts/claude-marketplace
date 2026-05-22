@@ -1,6 +1,5 @@
 ---
 description: Analyze code changes and recommend documentation updates
-documentation_type: how-to
 ---
 
 Analyze recent code changes and provide intelligent recommendations for documentation updates.

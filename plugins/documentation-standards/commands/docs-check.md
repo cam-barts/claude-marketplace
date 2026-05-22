@@ -1,6 +1,5 @@
 ---
 description: Check all documentation for standards compliance
-documentation_type: how-to
 ---
 
 Run a comprehensive documentation quality check on all markdown files in the project.

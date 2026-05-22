@@ -1,6 +1,5 @@
 ---
 description: Generate coverage report and identify gaps
-documentation_type: how-to
 ---
 
 Generate comprehensive coverage report and identify untested code.
