@@ -1,7 +1,7 @@
 {
   "name": "silverbullet-workflow",
-  "version": "0.2.0",
-  "description": "Action-oriented playbook for Cam's SilverBullet CLI workflows — start projects from templates, query tasks, append Captain's Log entries, search the space, and do first-time CLI setup. Companion to the `silverbullet` reference plugin: that one says what the tools are, this one says what to do with them.",
+  "version": "0.3.1",
+  "description": "Action-oriented playbook for Cam's SilverBullet CLI workflows — start projects from templates, query tasks, append Captain's Log entries, search the space, run a serendipity gardening round, and do first-time CLI setup. Companion to the `silverbullet` reference plugin: that one says what the tools are, this one says what to do with them.",
   "author": {
     "name": "cam-barts"
   },
@@ -16,7 +16,11 @@
     "tasks",
     "templates",
     "captains-log",
-    "personal"
+    "personal",
+    "serendipity",
+    "gardening",
+    "zettelkasten",
+    "wikilinks"
   ],
   "skills": "./skills",
   "commands": "./commands"

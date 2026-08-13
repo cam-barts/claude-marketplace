@@ -139,7 +139,7 @@ Action-oriented playbook companion to `silverbullet`. Where the reference plugin
 **Key Features:**
 
 - First-time CLI setup detection — checks `sb`/`zk` on PATH, env vars, config, server reachability; surfaces install instructions when missing
-- Slash commands for the daily-driver moves: `/sb-setup`, `/sb-tasks`, `/sb-new-project`, `/sb-search`, `/sb-log`
+- Slash commands for the daily-driver moves: `/sb-setup`, `/sb-tasks`, `/sb-new-project`, `/sb-search`, `/sb-log`, `/sb-garden`
 - Encodes Cam's collaboration patterns from memory — templates as starting places, tasks vs bullets, `[assignee:]` convention, report-before-commit
 - Reference docs for install, first-time setup, task patterns, project template structure, Space Lua pitfalls (expression-vs-statement, reserved `query` keyword, `net.proxyFetch` userdata)
 
@@ -150,10 +150,13 @@ Action-oriented playbook companion to `silverbullet`. Where the reference plugin
 - `/sb-new-project` - Scaffold a new project doc from `Library/Personal/Templates/Project`
 - `/sb-search` - Dispatch a search, picking `zk` or `sb query` based on the kind
 - `/sb-log` - Append an entry to today's Captain's Log
+- `/sb-garden` - Run a serendipity gardening round over the space
 
-**Skill:** `silverbullet-workflow` - Triggers when the task involves the SB CLI in any of these flavors: starting a new project, pulling or annotating `[assignee:]` tasks, writing Captain's Log entries, searching the space, syncing edits, evaluating Space Lua, fixing aspiring wikilinks, or first-time CLI setup
+**Skills:** `silverbullet-workflow` - Triggers when the task involves the SB CLI in any of these flavors: starting a new project, pulling or annotating `[assignee:]` tasks, writing Captain's Log entries, searching the space, syncing edits, evaluating Space Lua, fixing aspiring wikilinks, or first-time CLI setup
 
-**Version:** 0.2.0 (pre-release)
+`serendipity-gardening` - Cam's digital-gardening ritual: deal a wide random hand of notes from the Serendipity page's own pickers (or from the orphans nothing links to), hunt non-obvious connections between them, and propose the exact wikilinks. Writes an ephemeral scratch page per round and never edits content notes — Cam does the linking
+
+**Version:** 0.3.1 (pre-release)
 
 ## Plugin Philosophy Details
 

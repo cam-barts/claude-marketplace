@@ -23,6 +23,18 @@ Covers:
 - Searching — `zk list` for filesystem-side full-text, `sb query` / `sb lua` for the indexed view, when to pick which
 - Space Lua quirks — expression-not-statement form, reserved `query` keyword, `net.proxyFetch` userdata pitfalls
 
+### serendipity-gardening
+
+Cam's digital-gardening ritual, reconstructed from the 2026-06-30 session. Deals a wide random hand of notes using the [[Serendipity]] page's own Space Lua pickers, keeps the ones that talk to each other, and hunts for non-obvious connections between them. Output is a deliberately **ephemeral** scratch page per round — Cam harvests the wikilinks by hand and deletes it.
+
+Covers:
+
+- Two draw modes — uniform (`serendipity.randomPage()` looped ~24×, keep 10–14) and orphan mode (`scripts/thin_links.py`, notes with zero or one inbound link). Both skip pages that are records rather than notes: `Jira/` ticket mirrors, Captain's Logs, transcripts
+- The connection hunt — exact wikilinks plus why each link is illuminating rather than merely adjacent, ranked
+- The ephemeral session page — frontmatter flags, warning admonition, template and voice guide in [`references/session_page.md`](skills/serendipity-gardening/references/session_page.md)
+- The round-to-round feedback pass — detect the notes Cam edited since the last round, grade his link choices, catch frontmatter that would hide a new note from the pickers
+- **Never edits content notes.** It proposes; Cam links.
+
 ## Slash Commands
 
 - `/sb-setup` — first-time CLI setup wizard. Detects what's installed, walks through `$ZK_NOTEBOOK_DIR`, server URL, auth token.
@@ -30,6 +42,7 @@ Covers:
 - `/sb-new-project` — start a new project doc from `Library/Personal/Templates/Project`, sync to server.
 - `/sb-search` — full-text search across the space, choosing between `zk` and `sb query` based on what the user wants.
 - `/sb-log` — append an entry to today's Captain's Log.
+- `/sb-garden` — run a serendipity gardening round: random draw, connection hunt, ephemeral scratch page.
 
 ## Requirements
 
@@ -44,7 +57,7 @@ Covers:
 
 ## Version
 
-0.2.0
+0.3.1
 
 ## Attribution
 
