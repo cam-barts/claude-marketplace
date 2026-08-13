@@ -1,6 +1,6 @@
 {
   "name": "cam-marketplace",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Personal Claude Code plugin marketplace with opinionated, quality-enforcing plugins for documentation, testing, and static analysis",
   "owner": {
     "name": "cam-barts"
