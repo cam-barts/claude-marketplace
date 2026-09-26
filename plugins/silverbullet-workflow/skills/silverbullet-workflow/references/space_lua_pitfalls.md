@@ -22,26 +22,36 @@ sb lua 'mostLinked(5)'   # → calls the user-defined function, returns its resu
 ### Wrong
 
 ```bash
-sb lua 'return 1+1'      # → HTTP 500
-sb lua 'return "ok"'     # → HTTP 500
-sb lua 'local x = 1; return x'  # → HTTP 500
+sb lua 'return 1+1'             # → script_error, exit 2
+sb lua 'return "ok"'            # → script_error, exit 2
+sb lua 'local x = 1; return x'  # → script_error, exit 2
 ```
 
 The web UI's "Run Lua script" command has the same expression-only behavior.
 
+### Statements: use `--script`
+
+Anything with statements, locals, or an explicit `return` goes through `--script` (sb 1.9.0+):
+
+```bash
+sb lua --script check.lua
+printf 'local n = 0\nfor _ in ipairs(query[[from index.tag "page" limit 5]]) do n = n + 1 end\nreturn n' \
+  | sb lua --script -
+```
+
 ### Why this matters
 
-A 500 from `/.runtime/lua` is the server **correctly rejecting** malformed input. It is **NOT** evidence of a bridge wedge. A genuine wedge surfaces as `bridge_unavailable` (HTTP 503), a distinct error code.
+Since sb 1.9.0 the CLI reads the Runtime API's error code and reports malformed Lua as a **`script_error` with exit code 2** (a usage error) — it is the server **correctly rejecting** your input. Before 1.9.0 the same thing surfaced as a bare HTTP 500, and an older form of this guidance recommended `sb lua 'return "ok"'` as a health probe: malformed Space Lua that *always* failed, leading to multi-day "bridge wedged" false-positive reports. The correct probe is `sb lua '"ok"'`. Confirmed 2026-05-21.
 
-An older form of guidance recommended `sb lua 'return "ok"'` as a "is the bridge alive?" health probe — which is malformed Space Lua and ALWAYS returns 500, leading to multi-day "bridge wedged" false-positive reports. The correct probe is `sb lua '"ok"'`. Confirmed 2026-05-21.
+A genuine wedge surfaces as **`bridge_unavailable`** (HTTP 503) — a different code, a server fault.
 
 ### Diagnostic recipe
 
-If you see a 500 from `sb lua`:
+If `sb lua` fails:
 
-1. Verify the input is expression-form. Try `sb lua '"ok"'`. If THAT returns `"ok"`, your problem is malformed Lua, not a wedge.
-2. If `sb lua '"ok"'` also returns 500: check the error body. A 500 with `bridge_unavailable` in the message is a real wedge. A 500 without that token is usually still bad input.
-3. If `sb lua '"ok"'` returns 503 with `bridge_unavailable`: real wedge. `docker restart silverbullet-silverbullet-1` is the cure. See [[Projects/SilverBullet Chrome Runtime Issue]] in Cam's space.
+1. **Exit 2 / `script_error`** — your Lua threw or didn't parse. Check expression-vs-statement first; switch to `--script` if you need statements.
+2. **`bridge_unavailable`** — real wedge. `docker restart silverbullet-silverbullet-1` on warrig is the cure. See [[Projects/SilverBullet Chrome Runtime Issue]] in Cam's space.
+3. **Unsure?** Run `sb lua '"ok"'`. If that returns `"ok"`, the server is fine and the problem is your input.
 
 ## 2. `query` is a reserved Space Lua keyword
 
@@ -168,7 +178,7 @@ If you see `attempt to index a userdata value` from a `net.proxyFetch`-using blo
 
 All three look like infrastructure problems on first glance:
 
-- "sb lua 500" → "the runtime is broken"
+- "sb lua failed" (a 500 before 1.9.0, `script_error` now) → "the runtime is broken"
 - "unexpected symbol near 'q'" → "the parser has a bug"
 - "attempt to index a userdata value" → "the bridge can't handle this response"
 

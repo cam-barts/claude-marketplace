@@ -4,82 +4,65 @@ documentation_type: how-to
 
 # Installing the `sb` CLI
 
-The `sb` command is the CLI for talking to a SilverBullet v2 server's runtime API — runs Space Lua, queries the object index, syncs working-copy edits to the server. It's a separate binary from the SilverBullet server itself.
+`sb` is Cam's own Rust CLI for SilverBullet — [cam-barts/sb-cli](https://github.com/cam-barts/sb-cli). It is **not** part of the upstream SilverBullet release; don't look for it there. It syncs a local working copy of the space with the server and talks to the server's Runtime API (Space Lua, index queries, logs).
 
-## Where it lives upstream
+## Pick a flavor
 
-The CLI source ships inside the main SilverBullet repository:
+Every release ships two builds of the same CLI:
 
-- Repo: <https://github.com/silverbulletmd/silverbullet>
-- Releases: <https://github.com/silverbulletmd/silverbullet/releases>
+- **slim** (`sb-vX.Y.Z-<target>`) — the full notes / sync / journal CLI. Use this unless an agent drives `sb` through MCP.
+- **ai** (`sb-ai-vX.Y.Z-<target>`) — slim plus `sb mcp serve`, `sb skills init`, and `sb schema`.
 
-Releases include prebuilt binaries for Linux (amd64/arm64), macOS (amd64/arm64), and Windows. Cam runs the Linux amd64 build on warrig.
+`sb version` reports which one is installed (`features: skills,mcp` means the AI build). Warrig and the laptop both run the AI build.
 
-## Install — Linux (Cam's typical path)
+## Install — prebuilt (Linux x86_64)
 
 ```bash
-# Latest release URL — sb is bundled with the silverbullet binary in newer
-# releases, look in the release notes for the exact asset name.
-mkdir -p ~/.local/bin
+V=$(curl -fsSL https://api.github.com/repos/cam-barts/sb-cli/releases/latest | jq -r .tag_name)
 cd /tmp
-curl -L -o silverbullet.tar.gz \
-  "https://github.com/silverbulletmd/silverbullet/releases/latest/download/silverbullet-linux-x86_64.tar.gz"
-tar xzf silverbullet.tar.gz
-# Place sb on PATH
-mv sb ~/.local/bin/sb
-chmod +x ~/.local/bin/sb
-
-# Verify
-sb --version
+curl -fLO "https://github.com/cam-barts/sb-cli/releases/download/${V}/sb-ai-${V}-x86_64-unknown-linux-gnu.tar.gz"
+tar xzf "sb-ai-${V}-x86_64-unknown-linux-gnu.tar.gz"
+install -m 755 sb ~/.local/bin/sb
+sb version
 ```
 
-If `sb` isn't bundled in the release asset (the upstream layout has changed before), the fallback is building from source — see "Build from source" below.
+Drop `-ai` from the asset name for the slim build. Other targets: `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `aarch64-apple-darwin`, and `x86_64-pc-windows-msvc` (a `.zip`). `sha256sums.txt` on each release covers every asset.
 
-## Install — macOS
+## Upgrade
 
 ```bash
-# Homebrew tap if available, otherwise grab the macOS binary from the
-# releases page and drop it in /usr/local/bin or ~/.local/bin.
-curl -L -o silverbullet.tar.gz \
-  "https://github.com/silverbulletmd/silverbullet/releases/latest/download/silverbullet-darwin-aarch64.tar.gz"
-tar xzf silverbullet.tar.gz
-mv sb /usr/local/bin/sb
-chmod +x /usr/local/bin/sb
-
-sb --version
+sb upgrade --check   # is there a newer release?
+sb upgrade           # self-update, keeping the same flavor
 ```
 
-Adjust the asset name for amd64 if you're on Intel.
-
-## Build from source (fallback)
-
-If the release doesn't ship a `sb` binary for your platform, or you want to track main:
+## Install — from source
 
 ```bash
-git clone https://github.com/silverbulletmd/silverbullet.git
-cd silverbullet
-# silverbullet uses Deno
-deno task build-sb   # or check the Makefile for the current target name
-cp dist/sb ~/.local/bin/sb
+cargo install --git https://github.com/cam-barts/sb-cli                 # slim
+cargo install --git https://github.com/cam-barts/sb-cli --features ai   # ai
 ```
 
-Confirm Deno is installed (`deno --version`); if not, install from <https://deno.land>.
+On warrig, `~/.local/bin/sb` is a symlink into a local build (`~/git_local/sb-cli/target/release/sb`), so `cargo build --release --features ai` there updates it in place — and means warrig can run unreleased code. Check `sb version` → `commit:` if behaviour differs between machines.
+
+## Install `zk`
+
+`zk` is the companion CLI for full-text search and link analysis. On Arch/EndeavourOS it's packaged:
+
+```bash
+sudo pacman -S zk
+```
+
+Elsewhere, use a release binary from <https://github.com/zk-org/zk/releases>.
 
 ## PATH check
 
 ```bash
-which sb
-sb --version
+command -v sb zk
+sb version
 ```
 
-If `which sb` returns nothing, your shell init doesn't have `$HOME/.local/bin` on `$PATH`. Add this to `~/.bashrc` (or zshrc):
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Then `source ~/.bashrc` or open a fresh shell.
+If `sb` isn't found, `$HOME/.local/bin` isn't on `$PATH` — Cam's `~/.profile` adds it; open a login shell or `export PATH="$HOME/.local/bin:$PATH"`.
 
 ## What's next
 
-Once `sb --version` works, move to [`first_time_setup.md`](first_time_setup.md) for environment variables and the auth token. After that, `/sb-setup` walks through a smoke test.
+Once `sb version` works, move to [`first_time_setup.md`](first_time_setup.md) for the server, token, and local space. After that, `/sb-setup` runs the smoke test.

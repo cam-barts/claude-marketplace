@@ -1,90 +1,89 @@
 ---
 description: Append an entry to today's Captain's Log
-argument-hint: <entry> [task|swab|note|summary]
+argument-hint: <task summary> [state] [author]
 ---
 
-Append a short prose entry to today's Captain's Log (`Journals/Captains Log/YYYY-MM-DD.md`). Creates the file if it doesn't exist, using the standard log template.
+Append a timestamped entry to today's Captain's Log (`Journals/Captains Log/YYYY-MM-DD.md`), in the format the log has used since June 2026. Creates the day's file if it doesn't exist.
 
 ## Arguments
 
-- `entry` (required) — the prose body. One or more paragraphs. Will be appended verbatim.
-- `kind` (optional, default: `task`) — `task` | `swab` | `note` | `summary`. Controls the entry header.
+- `task` (required) — one line: what the work was. Link the page it touched: `Fix the ETag path ([[Repositories/sb-cli]])`.
+- `state` (optional, default: `done`) — `done` | `in progress` | `blocked` | `awaiting <thing>` (e.g. `awaiting signature`).
+- `author` (optional) — who's writing. Defaults to `claude (interactive session with Cam)` in an interactive session. Autonomous runs use their own name (`barbossa-worker`, `claude-code`).
+
+The body — what happened, what was found, what's left — is composed from the session, not passed as an argument.
+
+## Entry format
+
+```markdown
+## 14:05 — claude-code
+**Task:** Integrate the edge server features into `sb-cli` ([[Repositories/sb-cli]])
+**State:** awaiting signature
+
+Prose paragraphs: what was done, what was surprising, what was verified and how.
+Name commits, paths, and counts. Link the pages touched.
+
+- [ ] Follow-up that needs Cam #agent [assignee: cam] [author: claude-code] [created: 2026-09-04] [priority: medium]
+```
+
+- Heading: `## HH:MM — author` (local 24h time). Interactive sessions use a hyphen and a parenthetical: `## 03:40 - claude (interactive session with Cam)`.
+- `**Tier:**` appears only on Barbossa's autonomous entries (`opus → claude-opus-5`); leave it out otherwise.
+- Follow-ups for Cam are **tasks** at the end of the entry, with the full attribute set — see [`task_patterns.md`](../skills/silverbullet-workflow/references/task_patterns.md). This is how work gets handed back; it's what `/sb-tasks` pulls.
+- Don't `--sign` log entries: the heading already names the author.
 
 ## Steps
 
-1. **Resolve today's log path** in the user's local timezone:
+1. **Resolve the page and time** in the local timezone:
 
    ```bash
+   export PATH="$HOME/.local/bin:$PATH"
    TODAY=$(date +%Y-%m-%d)
-   LOG=~/silverbullet/Journals/Captains\ Log/${TODAY}.md
+   NOW=$(date +%H:%M)
+   PAGE="Journals/Captains Log/${TODAY}"
    ```
 
-2. **Create the file if absent.** Use Cam's standard log template:
-
-   ```markdown
-   ---
-   tags: log
-   ---
-
-   # Captain's Log — YYYY-MM-DD
-
-   ```
-
-   (One blank line after the heading, ready for entries.)
-
-3. **Compose the entry header** based on `kind`:
-
-   - `task` → `**Task picked:**` + the entry
-   - `swab` → `**Swab picked:**` + the entry
-   - `note` → `**Note:**` + the entry
-   - `summary` → `## Day summary` + the entry (used by the trailing-day roll-up swab; goes at the bottom of the file rather than appended mid-stream)
-
-4. **Append to the file:**
+2. **Pull first** so you append to the server's latest copy, not a stale one — Barbossa writes here around the clock:
 
    ```bash
-   {
-     echo ""
-     echo "**${HEADER}** ${ENTRY}"
-   } >> "$LOG"
+   cd ~/silverbullet && sb --no-input sync pull 2>&1 | tail -1
    ```
 
-   For `kind: summary`, prefix with a heading instead:
+3. **Compose the entry** into `$ENTRY` (heading, `**Task:**`, `**State:**`, blank line, body, optional tasks). If the day's file doesn't exist yet, prefix the page heading:
 
    ```bash
-   {
-     echo ""
-     echo "## Day summary"
-     echo ""
-     echo "${ENTRY}"
-   } >> "$LOG"
+   test -f ~/silverbullet/"${PAGE}.md" || ENTRY="# Captain's Log — ${TODAY}
+   ${ENTRY}"
    ```
 
-5. **Sync to server:**
+4. **Append.** `sb page append` handles the leading newline and creates the file if needed. It writes the **local** file:
 
    ```bash
-   cd ~/silverbullet && PATH="$HOME/.local/bin:$PATH" sb sync 2>&1 | tail -3
+   sb --no-input page append "$PAGE" --content "$ENTRY"
    ```
 
-   Expect `Push complete: 1 uploaded` (or 0 if the file already had today's entries).
+5. **Push and confirm** nothing was refused:
 
-6. **Surface the URL** so Cam can review:
+   ```bash
+   sb --no-input sync push 2>&1 | tail -1
+   ```
+
+   Expect `Push complete: 1 uploaded, 0 conflicts, … 0 failed`. A conflict means someone wrote the log in between — `sb sync resolve "${PAGE}.md" --diff`, keep both entries, never drop Barbossa's.
+
+6. **Surface the link:**
 
    ```text
-   Appended to [[Journals/Captains Log/YYYY-MM-DD]].
+   Logged to [[Journals/Captains Log/YYYY-MM-DD]].
    Open: https://bullet.coder.cam/Journals/Captains%20Log/YYYY-MM-DD
    ```
 
-## Entry style guide
+## Style
 
-- Prose, not bullets. The log is for reading later, not parsing.
-- Reference the project doc / page that work touched via wikilink: `[[Projects/X]]`.
-- Third-person-ish — works for both Cam's own entries and Barbossa's autonomous fires. Examples:
-  - `**Task picked:** [[Projects/Y]] — wired up the embedder. Hybrid query latency 5–25ms.`
-  - `**Swab picked:** Captain's Log roll-up. Added trailing-day summaries to 05-19 and 05-20.`
-  - `**Note:** SilverSearcher fully uninstalled; bridge healthy with the proper expression-form probe.`
-- One blank line between entries for readability.
+- Prose, not bullets — the log is read later, by Cam. Lead with the outcome, then the surprise, then the evidence.
+- Be concrete: commit hashes, file paths, counts, what was verified live versus in tests.
+- Name what's **left**, as tasks with an owner, not as a vague "next steps" paragraph.
+- A day roll-up, when asked for, goes at the bottom under `## Day summary`.
 
 ## See also
 
-- Memory: `feedback_chief_of_staff_mode.md` — when Barbossa logs autonomous fires
-- `task_patterns.md` — how task-completion entries reference back to the source `[ ]` line
+- [`task_patterns.md`](../skills/silverbullet-workflow/references/task_patterns.md) — task anatomy and the handoff patterns
+- [`/sb-inbox`](sb-inbox.md) — the other half of a handoff

@@ -12,7 +12,7 @@ Pull the current open task set for an assignee. Renders a short table — page, 
 
 ## Steps
 
-1. **Verify `sb` is reachable first** — run `sb lua '"ok"'`. If it returns anything but `"ok"`, dispatch to `/sb-setup` instead of forcing the query.
+1. **Verify `sb` is reachable first** — run `sb --no-input lua '"ok"'`. If it returns anything but `"ok"`, dispatch to `/sb-setup` instead of forcing the query. Exit `3` means auth; `1` with `bridge_unavailable` means the server's headless browser is down.
 
 2. **Build the query.** Use the **correct** filter — `done == false`, NOT `status == "open" or status == "in_progress"`. The latter is the malformed form that returns empty silently because SB tasks have no `status` field.
 
@@ -26,7 +26,7 @@ Pull the current open task set for an assignee. Renders a short table — page, 
      FILTER="assignee == \"$ASSIGNEE\" and done == false and not table.includes(itags, \"meta/template/slash\")"
    fi
 
-   sb query "from index.tag \"task\" where $FILTER order by priority desc, created desc limit $LIMIT"
+   sb --no-input --format json query "from index.tag \"task\" where $FILTER order by priority desc, created desc limit $LIMIT"
    ```
 
 3. **Render the result.** The query returns a JSON list. Surface to the user as a compact markdown table:
@@ -37,13 +37,14 @@ Pull the current open task set for an assignee. Renders a short table — page, 
 
    Truncate task names at ~80 chars. Sort already done by the query (priority desc, created desc).
 
-4. **Fallback to filesystem grep** if `sb query` returns `{}` AND the assignee is known to have open tasks. Don't auto-assume index lag — first verify the query syntax wasn't broken by an arg injection:
+4. **Fallback to filesystem grep** if `sb query` returns `[]` AND the assignee is known to have open tasks. Don't auto-assume index lag — first verify the query syntax wasn't broken by an arg injection:
 
    ```bash
-   grep -rEn '^\s*-\s*\[ \].*\[assignee:cam\]' ~/silverbullet/ 2>/dev/null \
-     | grep -v '/Captains Log/' \
+   grep -rEn "^\s*[-*]\s*\[ \].*\[assignee: ?${ASSIGNEE}\]" ~/silverbullet/ 2>/dev/null \
      | head -50
    ```
+
+   Keep Captain's Log hits: that's where agents leave handoff tasks for Cam at the end of an entry. The optional space (`assignee: ?`) matters — Cam's tasks are written `[assignee: cam]`, and the colon-only form misses about 40% of them.
 
    If the grep returns results but `sb query` didn't, log a "real index/filesystem mismatch" note — that's worth investigating, not a routine event.
 

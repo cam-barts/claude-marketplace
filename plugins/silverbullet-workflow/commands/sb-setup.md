@@ -31,30 +31,32 @@ Run a smoke test on the SilverBullet CLI environment. If anything fails, surface
 
    If `ZK_NOTEBOOK_DIR` is unset, point to [`first_time_setup.md`](../skills/silverbullet-workflow/references/first_time_setup.md) and the export line to add to shell init.
 
-4. **Check `sb` config:**
+4. **Check `sb` config** — let `sb` report what it resolved and from where:
 
    ```bash
-   test -f ~/.config/sb/config.toml && echo "config exists" || echo "MISSING"
+   sb version                     # version, commit, and flavor (features: skills,mcp = AI build)
+   sb --no-input config show      # every setting with its source (env / space file / user file / default)
+   sb config get-space            # which local space root it will use
    ```
 
-   If missing, walk through the `~/.config/sb/config.toml` setup in [`first_time_setup.md`](../skills/silverbullet-workflow/references/first_time_setup.md). The server URL + auth token come from KeePassXC on Cam's setup.
+   Needs `server_url`, a token, and `[sync] dir = "/home/nux/silverbullet"`. If the config is missing, walk through [`first_time_setup.md`](../skills/silverbullet-workflow/references/first_time_setup.md) — the easiest path on a new machine is copying `~/.config/sb/config.toml` from warrig. Flag an unset `identity` as a warning, not a failure: only `sb inbox` needs it.
 
 5. **Smoke test the server reachability:**
 
    ```bash
-   sb lua '"ok"' 2>&1 | tail -3
+   sb --no-input lua '"ok"'; echo "exit=$?"
    ```
 
-   Expected: `"ok"`.
+   Expected: `"ok"`, exit `0`. Otherwise branch on the exit code:
 
-   - If `bridge_unavailable` (HTTP 503): real bridge wedge, `docker restart silverbullet-silverbullet-1` on warrig is the fix.
-   - If HTTP 401: auth token wrong.
-   - If HTTP 500 on a well-formed expression: see [`space_lua_pitfalls.md`](../skills/silverbullet-workflow/references/space_lua_pitfalls.md). Almost always a malformed input issue, not a server one.
+   - Exit `3` — auth: the token is wrong or missing (`sb auth set`).
+   - Exit `2` with `script_error` — the Lua was malformed. Can't happen with `'"ok"'`; if you changed the probe, see [`space_lua_pitfalls.md`](../skills/silverbullet-workflow/references/space_lua_pitfalls.md).
+   - `bridge_unavailable` (HTTP 503) — real headless-Chrome wedge; `docker restart silverbullet-silverbullet-1` on warrig is the fix.
 
 6. **Smoke test the local space:**
 
    ```bash
-   sb sync status 2>&1 | head -10
+   sb --no-input sync status          # conflicts / marker_conflicts / readonly should be 0
    zk list --limit 1 2>&1
    ```
 
@@ -65,10 +67,10 @@ Run a smoke test on the SilverBullet CLI environment. If anything fails, surface
 Render a short status block to the user:
 
 ```text
-sb CLI:        ✓ v0.x.x
+sb CLI:        ✓ 1.9.0 (slim|ai)
 zk CLI:        ✓ installed
 ZK_NOTEBOOK_DIR: /home/nux/silverbullet
-~/.config/sb:  ✓ configured
+sb config:     ✓ server_url, token, sync dir (identity: set|unset)
 Server reach:  ✓ sb lua '"ok"' returned "ok"
 Local space:   ✓ in sync (or: N files pending)
 ```
