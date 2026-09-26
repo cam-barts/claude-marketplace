@@ -17,21 +17,25 @@ Triggers when the task involves SilverBullet pages, wikilinks, backlinks, aspiri
 Covers:
 
 - Choosing between `sb`, `zk`, and direct file edits
-- Syncing the Docker volume with the local working copy
-- Running Space Lua and querying the SilverBullet object index
+- Running `sb` safely as an agent — `--no-input`, JSON output, exit codes, `--yes`
+- Syncing the local working copy, and resolving conflicts and conflict stashes
+- Running Space Lua (`sb lua`, `--script`) and querying the object index (`sb describe`, `sb query`)
+- Server-side links, the Mention Inbox, and `--sign` (credit versus address)
+- Page history (`sb page history|diff|restore`) over the server's managed git revisions
 - Searching, tagging, and graph traversal with `zk`
 
 ## Requirements
 
 - SilverBullet v2 server running locally or remotely
-- `sb` CLI on `$PATH`
+- `sb` CLI 1.9.0+ on `$PATH` — [cam-barts/sb-cli](https://github.com/cam-barts/sb-cli)
 - `zk` with `ZK_NOTEBOOK_DIR` pointing at the synced working copy
 
 ## Version
 
-0.2.0 (pre-release)
+0.3.0 (pre-release)
 
 ## Attribution
 
 - **SilverBullet** — <https://silverbullet.md>
+- **sb CLI** — <https://github.com/cam-barts/sb-cli>
 - **zk** — <https://github.com/zk-org/zk>
