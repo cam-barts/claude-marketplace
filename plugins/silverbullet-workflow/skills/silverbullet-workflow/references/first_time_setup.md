@@ -4,96 +4,108 @@ documentation_type: how-to
 
 # First-time `sb` CLI setup
 
-After the binary is on PATH, the CLI needs to know **where the server is** and **how to authenticate**. There's also a `zk` CLI most workflows here pair with — same setup needed.
+After the binary is on PATH ([`cli_install.md`](cli_install.md)), `sb` needs to know **where the server is**, **how to authenticate**, and **where the local space lives**. `zk` needs the same local space.
 
-## Required environment variables
+## Fastest path on a new machine: copy warrig's config
 
-Add these to your shell init (`~/.bashrc`, `~/.zshrc`, or whichever):
-
-```bash
-# zk reads the SilverBullet space at ~/silverbullet.
-export ZK_NOTEBOOK_DIR="$HOME/silverbullet"
-
-# Make sure sb is found.
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-## Auth token
-
-`sb` talks to the SilverBullet server over HTTPS. If your server is behind auth (Cam's is — at `https://bullet.coder.cam`), `sb` needs a token. The token lives in `~/.config/sb/config.toml`:
-
-```toml
-# ~/.config/sb/config.toml
-[server]
-url = "https://bullet.coder.cam"
-auth_token = "your-token-here"
-user = "nux"
-```
-
-To create the file:
+Cam's machines share one layout, so the quickest setup is copying the user config and the space's small config file from warrig — **never** its sync state:
 
 ```bash
-mkdir -p ~/.config/sb
-cat > ~/.config/sb/config.toml <<'EOF'
-[server]
-url = "https://bullet.coder.cam"
-auth_token = "PASTE_TOKEN_HERE"
-user = "nux"
-EOF
+mkdir -p ~/.config/sb ~/.sb
+scp warrig:.config/sb/config.toml ~/.config/sb/config.toml
+scp warrig:.sb/config.toml ~/.sb/config.toml
 chmod 600 ~/.config/sb/config.toml
 ```
 
-**How to get the token:** SilverBullet generates tokens server-side. Cam has his in KeePassXC. On a fresh machine, copy it from KeePassXC and paste in. **Never commit this file** — `.gitignore` it.
+Do **not** copy `~/.sb/state.db`. It records which files warrig has synced; on another machine it makes `sb sync` believe the local files were deleted, and a push would delete them from the server.
 
-## Local space
+## The config format
 
-`sb sync` operates against the local space at `~/silverbullet`. First-time clone:
+`sb` merges settings from, highest precedence first: environment variables (`SB_SERVER_URL`, `SB_TOKEN`, `SB_IDENTITY`, `SB_SYNC_DIR`, …) → the space's `.sb/config.toml` → the user config `~/.config/sb/config.toml` → defaults. Cam's user config looks like:
 
-```bash
-mkdir -p ~/silverbullet
-cd ~/silverbullet
-sb sync pull   # downloads everything from the server
+```toml
+# ~/.config/sb/config.toml
+server_url = "https://bullet.coder.cam"
+token = "..."                 # from KeePassXC; or `sb auth set`
+space = "/home/nux/"          # space root: where .sb/ lives
+identity = "@cam"             # default recipient for `sb inbox`
+
+[sync]
+dir = "/home/nux/silverbullet"
+workers = 10
+attachments = true
+exclude = ["_plug/*", ".zk/*"]
+
+[daily]
+path = "Inbox/{{date}}"
+dateFormat = "%Y-%m-%d"
+template = "Daily"
+
+[shell]
+enabled = true
+
+[runtime]
+available = true              # enables sb lua / query / describe / logs
 ```
 
-On Cam's primary host (warrig) `~/silverbullet/` already exists. On a fresh laptop, this is the bootstrap.
+`sb config show` prints every resolved value with its source — use it instead of reading files.
 
-## `zk` CLI install
-
-`zk` is the companion CLI for full-text search, link analysis, tags. The skill's search workflows lean on it heavily.
+## From scratch (no warrig to copy from)
 
 ```bash
-# Linux (binary)
-go install github.com/zk-org/zk@latest
-# or download from https://github.com/zk-org/zk/releases
-
-# Initialize against the SB space
-cd ~/silverbullet
-zk init   # creates .zk/ and config
+sb init https://bullet.coder.cam     # create a local space linked to the server
+sb auth set                          # prompts for the token (or: --token ...)
+sb config set-space /home/nux/       # record the space root in the user config
 ```
 
-Cam's `.zk/config.toml` already exists in `~/silverbullet/.zk/`. On a fresh checkout you may need to run `zk init`.
+Then add the `[sync] dir` and `[runtime] available = true` settings above. The token lives in KeePassXC.
+
+## Pull the space
+
+```bash
+sb sync pull --dry-run   # preview: should be all downloads, nothing else
+sb sync pull
+sb sync status           # all zeros = in step with the server
+```
+
+The whole space is ~3,500 files / ~160 MB with attachments.
+
+## Environment
+
+`~/.profile` (from Cam's dotfiles) already exports these; set them by hand only in a bare shell:
+
+```bash
+export ZK_NOTEBOOK_DIR="$HOME/silverbullet"
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+## `zk`
+
+zk's notebook config lives inside the space at `~/silverbullet/.zk/` (excluded from sync) and its user config at `~/.config/zk/`. Copy both from warrig, then build the index locally — don't copy `notebook.db`:
+
+```bash
+mkdir -p ~/.config/zk ~/silverbullet/.zk
+scp -r warrig:.config/zk/config.toml warrig:.config/zk/templates ~/.config/zk/
+scp -r warrig:silverbullet/.zk/config.toml warrig:silverbullet/.zk/templates ~/silverbullet/.zk/
+zk index                 # ~2–3 minutes for the full space
+```
 
 ## Smoke test
 
 ```bash
-sb --version          # CLI is there
-sb lua '1+1'          # returns 2 — server is reachable, auth works
-sb sync status        # shows whether there are local-vs-server differences
-zk list --limit 1     # zk sees the space
+sb version               # CLI present, which flavor
+sb --no-input lua '"ok"' # → "ok": server reachable, token works
+sb sync status           # local vs server
+zk list --limit 1        # zk sees the space
 ```
 
 If any of those fail:
 
-- `sb lua` returns `bridge_unavailable` → server-side headless Chrome wedge; see [[Projects/SilverBullet Chrome Runtime Issue]] in Cam's space (parked, recurrence-driven).
-- `sb lua` returns HTTP 500 on a well-formed expression → see [`space_lua_pitfalls.md`](space_lua_pitfalls.md) — most often the syntax is wrong (expression vs statement).
-- `sb sync` returns HTTP 401 → token is wrong or missing.
-- `zk list` returns nothing → `$ZK_NOTEBOOK_DIR` not exported in current shell, or the space is empty.
-
-## Common gotchas
-
-- **`source ~/.bashrc` after editing init.** New env vars don't propagate to existing shells until you source the file or open a fresh one.
-- **`~/.config/sb/config.toml` permissions.** `chmod 600` so the token isn't world-readable. The CLI may refuse to read it otherwise.
+- Exit `3` from `sb` → token wrong or missing: `sb auth set`.
+- `bridge_unavailable` → server-side headless Chrome wedge; see [[Projects/SilverBullet Chrome Runtime Issue]] in Cam's space.
+- Exit `2` with `script_error` from `sb lua` → malformed Lua, not a server fault; see [`space_lua_pitfalls.md`](space_lua_pitfalls.md).
+- `zk list` returns nothing → `$ZK_NOTEBOOK_DIR` not exported, or `zk index` hasn't run.
 
 ## Next
 
-Once the smoke test passes, the skill's five main commands (`/sb-setup`, `/sb-tasks`, `/sb-new-project`, `/sb-search`, `/sb-log`) are usable. `/sb-setup` re-runs the smoke test on demand.
+Once the smoke test passes, the slash commands are usable: `/sb-setup`, `/sb-tasks`, `/sb-inbox`, `/sb-new-project`, `/sb-search`, `/sb-log`, `/sb-garden`. `/sb-setup` re-runs the smoke test on demand.

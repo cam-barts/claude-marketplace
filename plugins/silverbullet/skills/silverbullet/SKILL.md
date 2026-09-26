@@ -28,9 +28,14 @@ Pick the right tool for the job — reaching for the wrong one wastes time:
 | Find orphan or poorly-connected notes | `zk list --orphan` / `--missing-backlink` |
 | Discover notes related to a topic | `zk list --related` or `--mention` |
 | Get the link graph as JSON | `zk graph --format json` |
+| Backlinks from the **server's** index (fresh even if zk's index is stale) | `sb links PAGE` / `sb links PAGE --from` |
+| Find out which tags/attributes exist before querying | `sb describe` / `sb describe TAG` |
 | Query SilverBullet data objects (highlights, annotations) | `sb query` |
-| Run Space Lua functions (widgets, custom queries) | `sb lua` |
+| Run Space Lua functions (widgets, custom queries) | `sb lua` (expressions) / `sb lua --script FILE` (statements) |
+| Check `@mention`s addressed to you | `sb inbox` |
+| See, diff, or roll back a page's past revisions | `sb page history` / `diff` / `restore` |
 | Sync file changes to the server | `sb sync` |
+| Append to a page, crediting the author | `sb page append NAME --content … --sign @name`, then `sb sync` |
 | Edit note content directly | Edit files in `~/silverbullet/`, then `sb sync` |
 
 ## Environment Setup
@@ -45,8 +50,26 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## The `sb` CLI
 
-Talks directly to the SilverBullet server's runtime API. Use it for syncing, evaluating
-Lua, and querying the object index.
+`sb` is Cam's own Rust CLI ([cam-barts/sb-cli](https://github.com/cam-barts/sb-cli)), not
+the upstream SilverBullet binary. It syncs a local working copy with the server and talks to
+the server's Runtime API. This section tracks **sb 1.9.0**; `sb version` shows what's installed.
+
+**The CLI documents itself — trust it over this page.** `sb <command> --help` is always
+current, `sb query --help` carries verified worked examples, and (AI build) `sb schema`
+emits the whole command/flag surface as JSON.
+
+### Running sb as an agent
+
+- Pass **`--no-input`** so `sb` never blocks on a picker, `$EDITOR`, or confirmation
+  (also implied when stdin/stdout isn't a TTY).
+- Output is **JSON automatically when stdout isn't a TTY**; force it with `--format json`.
+  Errors go to stderr as `{error, code, remediation}`, so stdout stays parseable.
+- Destructive operations need **`--yes`** (or `--force`); without it they exit `6` with the
+  exact re-run command.
+- Branch on **exit codes**, not error text: `0` ok · `1` general · `2` usage (including a
+  Lua `script_error`) · `3` auth · `4` not found · `5` conflict · `6` needs `--yes`.
+- Slow query? `--timeout SECONDS` raises the HTTP timeout and the Runtime API's `X-Timeout` together.
+- `--fields a,b` trims JSON output on `page list`, `query`, `describe`, `links`, `inbox`.
 
 ### Syncing
 
@@ -54,8 +77,30 @@ Lua, and querying the object index.
 sb sync              # bidirectional sync
 sb sync pull         # pull latest from server
 sb sync push         # push local changes
-sb sync status       # check what's changed
+sb sync status       # JSON: modified/new/deleted/conflicts/marker_conflicts/readonly
+sb sync --dry-run    # preview actions without executing
 ```
+
+A push no longer aborts on one bad file: read-only (403) paths and per-file failures are
+reported at the end while every other upload still lands (`0 read-only, 0 failed` in the summary).
+
+**Conflicts.** A conflicted file's local copy is stashed under `~/.sb/conflicts/`.
+
+```bash
+sb sync conflicts                              # list them
+sb sync resolve PATH --diff                    # inspect one
+sb sync resolve PATH --keep-local|--keep-remote
+sb sync resolve --all --keep-remote            # unattended: walk every conflict
+sb sync prune-stashes --dry-run                # stashes that carry no information
+sb sync prune-stashes                          # ...delete them (--all: also resolved paths)
+```
+
+`marker_conflicts` in `sb sync status` counts files the **server** wrote git-style
+`<<<<<<<` markers into — fix those by editing the file, not with `resolve`.
+
+**ETags.** Conditional writes (`If-Match`) only work when the server sends a *strong* ETag.
+Through Cloudflare, `bullet.coder.cam` returns a weak one, so sync falls back to the old
+behaviour; `sb --verbose` says which it got.
 
 ### Space Lua evaluation
 
@@ -65,35 +110,74 @@ Call any function defined in the space's Lua scripts. Cam has custom functions i
 ```bash
 sb lua 'mostLinked(5)'
 sb lua 'aspiringPagesSorted(20)'
+sb lua --script check.lua          # statements, locals, explicit return
+printf 'local n = 2\nreturn n * 21' | sb lua --script -
 ```
 
 ### Index queries
 
-Query SilverBullet's indexed data objects directly:
+`index.tag "NAME"` is the **only** query source. Discover what exists first:
+
+```bash
+sb describe                        # every tag in the index, with object counts
+sb describe highlight              # observed attributes and types for one tag
+```
+
+Then query:
 
 ```bash
 sb query 'from index.tag "highlight" limit 5'
-sb query 'from index.tag "annotation" where _.page == "Zotero/Some Paper" limit 10'
-sb query 'from index.tag "link" limit 5'
-sb query 'from index.tag "tag" limit 5'
+sb query 'from index.tag "annotation" where page == "Zotero/Some Paper" limit 10'
+sb query 'from index.tag "page" where zoteroKey select name, zoteroKey'
 ```
+
+Rules that cost an afternoon each (all in `sb query --help`): a bare attribute is an
+existence filter (`where zoteroKey`); `select` projects **and** de-duplicates; selecting one
+field returns a flat array; comparison is `==` — a single `=` is a syntax error.
+
+### Links, mentions, and signing
+
+```bash
+sb links "Z/Apprenticeship"            # backlinks, from the server's relation index
+sb links "Z/Apprenticeship" --from     # outgoing links
+sb inbox --to @cam                     # open @mentions addressed to Cam
+sb page append "Projects/X" --content "Checked the backups." --sign @claude-code
+```
+
+- An **`@mention`** *addresses* someone: it lands in their Mention Inbox until the task it
+  sits in is done.
+- A **signature** (`--sign @name`, rendered `-- @name`) *credits* an author and never lands
+  in anyone's inbox. Sign what you write; `@mention` only when you need someone to act.
+- `sb inbox` without `--to` uses `identity` from config or `SB_IDENTITY`.
+- `sb page append` and `sb daily` write the **local** file; `sb sync` afterwards.
+
+### Page history
+
+```bash
+sb page history "Projects/X"                    # revisions (--limit, --before HASH)
+sb page diff "Projects/X"                       # uncommitted local changes vs HEAD
+sb page diff "Projects/X" --rev <40-char hash>  # what one revision changed
+sb page restore "Projects/X" --rev <hash> --yes # write old content locally, then sb sync
+```
+
+Use it to review or roll back a bulk edit; a restore goes through normal sync conflict
+handling. `bullet.coder.cam` runs in **managed** mode (`SB_REVISIONS=managed` in the
+compose file, since 2026-09-26): SilverBullet commits changes ~30 s after edits go quiet,
+authored `SilverBullet`, so the newest seconds of an edit may not have a revision yet. The
+JSON's `mode` says `managed`; `unmanaged` or `disabled` means history won't be recorded.
+Hidden files and the tool/cache folders in the space's `.gitignore` are never committed.
 
 ### Troubleshooting sb
 
-**`sb lua` takes an expression, NOT a statement block.** Pass a bare expression:
-`sb lua '1+1'` returns `2`; `sb lua '"ok"'` returns `"ok"`. Do **not** prefix with
-`return` — `sb lua 'return 1+1'` returns HTTP 500 because top-level `return` isn't
-valid Space Lua. (Cam called this out 2026-05-21 — earlier guidance here suggested
-`sb lua 'return "ok"'` as a health probe, which was the source of multiple
-false-positive "headless-Chrome bridge wedged" reports. The web UI's "Run Lua script"
-command has the same expression-only behavior.)
+**`sb lua` takes an expression, NOT a statement block.** `sb lua '1+1'` returns `2`;
+`sb lua '"ok"'` returns `"ok"`. `sb lua 'return 1+1'` is a Lua syntax error — reported as a
+`script_error`, **exit code 2** — because `/.runtime/lua` doesn't accept statements. Use
+`--script` for statements. (Before 1.9.0 this surfaced as a bare HTTP 500, which caused
+multiple false-positive "bridge wedged" reports.)
 
-If `sb lua` or `sb query` returns a 500 error AFTER you've verified the syntax is
-expression-form, the Space Lua runtime may be overloaded from a recent reload. Wait
-a few seconds and retry with `sb lua '"ok"'`. A different error code,
-`bridge_unavailable`, indicates a genuine headless-Chrome wedge — distinct from a
-malformed-expression 500. If the server stays down on well-formed input, fall back
-to `zk` for search tasks — zk reads the filesystem directly.
+A genuinely wedged headless-Chrome bridge reports **`bridge_unavailable`** (HTTP 503) — distinct
+from a malformed-expression error. Probe with `sb lua '"ok"'`; if the server stays down on
+well-formed input, fall back to `zk` for search tasks — zk reads the filesystem directly.
 
 ## The `zk` CLI
 
@@ -112,7 +196,7 @@ zk index --force  # full rebuild
 ```
 
 **If zk errors with "database is locked"**, another `zk index` process is still running.
-Find and kill it with `lsof ~/.zk/notebook.db` or wait for it to finish.
+Find and kill it with `lsof ~/silverbullet/.zk/notebook.db` or wait for it to finish.
 
 ### Searching notes
 

@@ -52,7 +52,7 @@ Dispatch a search across the SB space, choosing the right tool based on what the
    ...
    ```
 
-4. **Fall back to `sb query`** if the user explicitly wants the indexed view (tags, frontmatter fields) rather than the filesystem view. Example: "find all docs with `state: doing`" → `sb query 'from index.page where state == "doing"'`.
+4. **Fall back to `sb query`** if the user explicitly wants the indexed view (tags, frontmatter fields) rather than the filesystem view. Example: "find all docs with `state: doing`" → `sb query 'from index.tag "page" where state == "doing"'`. `index.tag "NAME"` is the only query source; run `sb describe` to see which tag names exist and `sb describe NAME` for their attributes.
 
 ## When to pick which tool
 
@@ -62,6 +62,7 @@ Dispatch a search across the SB space, choosing the right tool based on what the
 | "find notes tagged X" | `zk list --tag` (or `sb query 'from index.tag "X"'`) | Both work; zk doesn't need the SB server up |
 | "what links to X" | `zk list --link-to` | Link graph is zk's domain |
 | "what does X link to" | `zk list --linked-by` | Outbound links |
+| "what links to X" when zk's index may be stale (fresh machine, just synced) | `sb links "X"` (`--from` for outbound) | Server's relation index, always current |
 | "orphan notes in Z/" | `zk list Z/ --orphan` | Structural analysis |
 | "all tasks assigned to barbossa" | `sb query` (see `/sb-tasks`) | Needs the indexed view |
 | "recent edits this week" | `zk list --modified-after "last monday" --sort modified-` | Time filtering |

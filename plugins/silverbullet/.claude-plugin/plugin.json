@@ -1,6 +1,6 @@
 {
   "name": "silverbullet",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Reference manual for Cam's SilverBullet knowledge base — the sb and zk CLIs, Space Lua, wikilinks, backlinks. Pair with silverbullet-workflow for the action layer. Highly personal: paths and Lua functions are specific to Cam's setup.",
   "author": {
     "name": "cam-barts"
