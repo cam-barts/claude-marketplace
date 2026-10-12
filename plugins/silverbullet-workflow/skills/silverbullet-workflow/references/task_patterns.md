@@ -10,39 +10,56 @@ How Cam structures tasks in SilverBullet, what the query looks like, and what NO
 
 **Since 2026-10-11 ownership is expressed as an `@name` mention in the task line.**
 `[assignee: cam]` is legacy: still read, still present on older tasks, but no longer the
-thing to write.
+thing to write. A mention lands in Cam's Mention Inbox, which he reads; `[assignee:]` only
+surfaces if someone runs a query.
 
 ```markdown
 - [ ] Confirm Meilisearch data dir is in borgmatic @cam #agent [author: barbossa] [created: 2026-10-11] [priority: medium]
 ```
 
-Put `@cam` after the task text and **before** the `#tags` and `[attributes]`. Cam's reason
-for the switch is practical rather than stylistic: a mention lands in his Mention Inbox,
-which he actually reads, whereas `[assignee:]` only shows up if someone runs a query.
+Put `@cam` after the task text and **before** the `#tags` and `[attributes]`.
 
-It is also measurably more reliable. The task index silently misses tasks on a
-substantial fraction of pages (97 of 169 task-bearing pages were indexed when this was
-measured on 2026-10-11), so `from index.tag "task" where assignee == "cam"` can return
-nothing for a page full of perfectly valid open tasks. The **mention** index is a
-different path and surfaces those same tasks correctly, with `fromTag: "task"`. When the
-two disagree, trust the filesystem and the Mention Inbox over the task index.
+### A task is only a work item if it carries an inline hashtag
 
-All 173 of Cam's open tasks carry `@cam` as of 2026-10-11, so a mention-based pull is
-complete for his own work.
+This is the rule that matters most, and getting it wrong is how an agent spams Cam's inbox.
 
-### Two gotchas when bulk-editing task text
+`space/CONFIG.md` deliberately sets `config.set("index.task.all", false)` (see its
+"Task Indexer Scope" section; decision logged 2026-05-12 in
+`AI Generated/Barbossa/SilverBullet Tasks Workflow` § 3.5). With that flag off, the
+indexer keeps only tasks with at least one **inline** hashtag:
 
-- **Adding a mention reworders the task, and that changes its identity downstream.**
-  `bugwarrior-silverbullet` derives its `sbid` from `sha1(page + normalized task text)`,
-  so editing the text orphans the old Taskwarrior task and creates a new one. Adding
-  `@cam` across the space on 2026-10-11 completed 102 Taskwarrior tasks and recreated
-  them. Nothing of Cam's was lost (no `start`, no `due`; the annotations and tags were
-  bugwarrior's own) and the churn is one-time, but do not repeat it casually. Backfilling
-  an explicit `[id: ...]` attribute makes `sbid` stable across rewording and is the
-  durable fix.
-- **A mention only reaches the inbox from a real task line.** A mention in a plain
-  paragraph or header stamps the *page* object instead, which clutters the inbox. Check
-  fenced code blocks before bulk-inserting: `- [ ]` lines inside a fence are not tasks.
+```js
+i || (a = a.filter(u => u.tag !== "task" || u.tags?.length))
+```
+
+So the space has two distinct kinds of checkbox:
+
+| Shape | Meaning |
+|---|---|
+| `- [ ] … #agent` / `#shared` / `#review` | a real work item: indexed, queryable, belongs in the inbox |
+| `- [ ] …` with no hashtag | a **document-semantic** checkbox — a step in a plan, a rubric row. NOT work. |
+
+Measured 2026-10-11: 604 tagged tasks are indexed, 1396 untagged ones are not, with zero
+mismatches either way. New agent tasks get a channel tag automatically from the slash
+templates in `Library/Personal/Slash Templates/`.
+
+**Therefore: only ever address a mention to a task that carries a channel tag.** Adding
+`@cam` to an untagged checkbox misrepresents a document step as assigned work. This
+mistake was made and reverted on 2026-10-11: 166 mentions were added off `[assignee: cam]`
+alone, and 75 had to be stripped again because their tasks were untagged.
+
+Note that `tags` on a task object is the **inline** hashtags only; `itags` additionally
+carries tags inherited from the page frontmatter. The indexer filters on `tags`, so a page
+tagged `project` does nothing for its untagged tasks.
+
+### The other gotcha: rewording a task changes its downstream identity
+
+`bugwarrior-silverbullet` derives `sbid` from `sha1(page + normalized task text)`, and the
+indexed task name includes the mention. So editing task text orphans the old Taskwarrior
+task and creates a new one. Adding mentions across the space on 2026-10-11 completed and
+recreated 102 Taskwarrior tasks — one-time, nothing of Cam's lost (no `start`, no `due`),
+but do not repeat it casually. Backfilling an explicit `[id: ...]` attribute makes `sbid`
+stable and is the durable fix.
 
 ## Anatomy of a task
 
@@ -96,12 +113,11 @@ legacy attribute so older tasks still show up:
 sb query 'from index.tag "task" where done == false and (table.includes(recipients, "@cam") or assignee == "cam") and not table.includes(itags, "meta/template/slash") order by priority desc, created desc'
 ```
 
-`recipients` is only present on objects that carry a mention, so guard it rather than
-assuming the field exists. And remember the task index is incomplete: for a *complete*
-picture of Cam's open work, read the Mention Inbox (`sb inbox --to @cam`) or the
-filesystem, not this query alone.
+`recipients` is only present on objects carrying a mention, so guard it rather than
+assuming the field exists. Remember this returns only **tagged** tasks, by design — that is
+the whole work-item set, not a partial view. Untagged checkboxes are deliberately absent.
 
-### The query that DOES NOT work
+## The query that DOES NOT work
 
 ```bash
 # WRONG — there is no `status` field. Returns {} silently.

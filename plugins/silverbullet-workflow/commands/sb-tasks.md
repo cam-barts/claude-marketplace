@@ -1,5 +1,5 @@
 ---
-description: Pull Cam's (or Barbossa's) open tasks from the SilverBullet indexed view, matching @mentions with a legacy assignee fallback
+description: Pull Cam's (or Barbossa's) open tasks from the SilverBullet indexed view, matching @mentions with a legacy assignee fallback (tagged tasks only, by design)
 argument-hint: [assignee] [limit]
 ---
 
