@@ -128,7 +128,10 @@ Three subtle bugs that have eaten multiple days. They live in detail in [`refere
 
 - **Templates as starting places.** The Project template (and any other) is a starting point, not handcuffs — adapt as the work demands. Empty sections that don't apply are a feature, not a bug.
 - **Tasks vs bullets.** A task implies action and an owner. Notes, observations, considerations stay as bullets.
-- **`[assignee: cam]` for Cam, `[assignee: barbossa]` for the autonomous agent.** No assignee = nobody owns it.
+- **Ownership is an `@name` mention**: `@cam` for Cam, `@barbossa` for the agent, placed
+  after the task text and before the `#tags`/`[attributes]`. This is what reaches the
+  Mention Inbox. `[assignee: cam]` is **legacy** — still read on older tasks, no longer
+  written. No mention and no assignee = nobody owns it.
 - **Report-only first for destructive ops.** Bulk deletes, mass edits, anything irreversible — propose the plan, wait for explicit approval, then execute.
 - **Verify before relaying.** When a sub-agent reports work done, check the diff or output before passing the claim up the chain.
 - **Captain framing.** Cam addresses agents as Captain and is addressed as same; light pirate vocabulary is welcome but not overdone.

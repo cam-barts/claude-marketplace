@@ -6,6 +6,44 @@ documentation_type: reference
 
 How Cam structures tasks in SilverBullet, what the query looks like, and what NOT to track as a task.
 
+## Ownership: mentions, not assignee metadata
+
+**Since 2026-10-11 ownership is expressed as an `@name` mention in the task line.**
+`[assignee: cam]` is legacy: still read, still present on older tasks, but no longer the
+thing to write.
+
+```markdown
+- [ ] Confirm Meilisearch data dir is in borgmatic @cam #agent [author: barbossa] [created: 2026-10-11] [priority: medium]
+```
+
+Put `@cam` after the task text and **before** the `#tags` and `[attributes]`. Cam's reason
+for the switch is practical rather than stylistic: a mention lands in his Mention Inbox,
+which he actually reads, whereas `[assignee:]` only shows up if someone runs a query.
+
+It is also measurably more reliable. The task index silently misses tasks on a
+substantial fraction of pages (97 of 169 task-bearing pages were indexed when this was
+measured on 2026-10-11), so `from index.tag "task" where assignee == "cam"` can return
+nothing for a page full of perfectly valid open tasks. The **mention** index is a
+different path and surfaces those same tasks correctly, with `fromTag: "task"`. When the
+two disagree, trust the filesystem and the Mention Inbox over the task index.
+
+All 173 of Cam's open tasks carry `@cam` as of 2026-10-11, so a mention-based pull is
+complete for his own work.
+
+### Two gotchas when bulk-editing task text
+
+- **Adding a mention reworders the task, and that changes its identity downstream.**
+  `bugwarrior-silverbullet` derives its `sbid` from `sha1(page + normalized task text)`,
+  so editing the text orphans the old Taskwarrior task and creates a new one. Adding
+  `@cam` across the space on 2026-10-11 completed 102 Taskwarrior tasks and recreated
+  them. Nothing of Cam's was lost (no `start`, no `due`; the annotations and tags were
+  bugwarrior's own) and the churn is one-time, but do not repeat it casually. Backfilling
+  an explicit `[id: ...]` attribute makes `sbid` stable across rewording and is the
+  durable fix.
+- **A mention only reaches the inbox from a real task line.** A mention in a plain
+  paragraph or header stamps the *page* object instead, which clutters the inbox. Check
+  fenced code blocks before bulk-inserting: `- [ ]` lines inside a fence are not tasks.
+
 ## Anatomy of a task
 
 A task is a Markdown checklist bullet with attributes inline:
@@ -27,7 +65,8 @@ States:
 
 Attributes (inline `[key: value]`, all optional):
 
-- `[assignee: cam]` or `[assignee: barbossa]` — owner. No assignee = nobody owns it.
+- `[assignee: cam]` / `[assignee: barbossa]` — **legacy** owner field. Read it on old
+  tasks; write an `@name` mention instead. See the section above.
 - `[author: claude-code]` / `[author: barbossa-worker]` — who filed it, when that isn't the owner
 - `[priority: high|medium|low]` — sort key
 - `[created: YYYY-MM-DD]` — when the task was filed
@@ -49,6 +88,18 @@ sb query 'from index.tag "task" where assignee == "barbossa" and done == false a
 The `not table.includes(itags, "meta/template/slash")` exclusion filters out template scaffolding so example tasks inside slash-command templates don't show up in real work pulls.
 
 Substitute `assignee == "cam"` for Cam's tasks, or drop the assignee filter to see everything.
+
+For the **mention-first** convention, match the recipient instead, and fall back to the
+legacy attribute so older tasks still show up:
+
+```bash
+sb query 'from index.tag "task" where done == false and (table.includes(recipients, "@cam") or assignee == "cam") and not table.includes(itags, "meta/template/slash") order by priority desc, created desc'
+```
+
+`recipients` is only present on objects that carry a mention, so guard it rather than
+assuming the field exists. And remember the task index is incomplete: for a *complete*
+picture of Cam's open work, read the Mention Inbox (`sb inbox --to @cam`) or the
+filesystem, not this query alone.
 
 ### The query that DOES NOT work
 

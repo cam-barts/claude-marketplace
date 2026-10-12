@@ -1,5 +1,5 @@
 ---
-description: Pull Cam's (or Barbossa's) open tasks from the SilverBullet indexed view, using the correct done == false query
+description: Pull Cam's (or Barbossa's) open tasks from the SilverBullet indexed view, matching @mentions with a legacy assignee fallback
 argument-hint: [assignee] [limit]
 ---
 
@@ -23,7 +23,9 @@ Pull the current open task set for an assignee. Renders a short table — page, 
    if [ "$ASSIGNEE" = "*" ]; then
      FILTER='done == false and not table.includes(itags, "meta/template/slash")'
    else
-     FILTER="assignee == \"$ASSIGNEE\" and done == false and not table.includes(itags, \"meta/template/slash\")"
+     # Mention-first: match an `@name` recipient, falling back to the legacy
+   # `[assignee:]` attribute so pre-2026-10-11 tasks still appear.
+   FILTER="(table.includes(recipients, \"@$ASSIGNEE\") or assignee == \"$ASSIGNEE\") and done == false and not table.includes(itags, \"meta/template/slash\")"
    fi
 
    sb --no-input --format json query "from index.tag \"task\" where $FILTER order by priority desc, created desc limit $LIMIT"

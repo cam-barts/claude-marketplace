@@ -23,12 +23,14 @@ The body — what happened, what was found, what's left — is composed from the
 Prose paragraphs: what was done, what was surprising, what was verified and how.
 Name commits, paths, and counts. Link the pages touched.
 
-- [ ] Follow-up that needs Cam #agent [assignee: cam] [author: barbossa] [created: 2026-09-04] [priority: medium]
+- [ ] Follow-up that needs Cam @cam #agent [author: barbossa] [created: 2026-09-04] [priority: medium]
 ```
 
 - Heading: `## HH:MM — author` (local 24h time). Interactive sessions use a hyphen and a parenthetical: `## 03:40 - barbossa (interactive session with Cam)`.
 - `**Tier:**` appears only on Barbossa's autonomous entries (`opus → claude-opus-5`); leave it out otherwise.
-- Follow-ups for Cam are **tasks** at the end of the entry, with the full attribute set — see [`task_patterns.md`](../skills/silverbullet-workflow/references/task_patterns.md). This is how work gets handed back; it's what `/sb-tasks` pulls.
+- Follow-ups for Cam are **tasks** at the end of the entry, addressed with an `@cam`
+  mention (that is what puts them in his Mention Inbox; `[assignee:]` is legacy and no
+  longer written), with the full attribute set — see [`task_patterns.md`](../skills/silverbullet-workflow/references/task_patterns.md). This is how work gets handed back; it's what `/sb-tasks` pulls.
 - Don't `--sign` log entries: the heading already names the author.
 
 ## Steps
