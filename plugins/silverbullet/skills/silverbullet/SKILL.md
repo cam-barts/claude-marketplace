@@ -52,7 +52,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 `sb` is Cam's own Rust CLI ([cam-barts/sb-cli](https://github.com/cam-barts/sb-cli)), not
 the upstream SilverBullet binary. It syncs a local working copy with the server and talks to
-the server's Runtime API. This section tracks **sb 1.9.0**; `sb version` shows what's installed.
+the server's Runtime API. This section tracks **sb 1.9.1**; `sb version` shows what's installed.
 
 **The CLI documents itself — trust it over this page.** `sb <command> --help` is always
 current, `sb query --help` carries verified worked examples, and (AI build) `sb schema`
@@ -148,7 +148,15 @@ sb page append "Projects/X" --content "Checked the backups." --sign @claude-code
   sits in is done.
 - A **signature** (`--sign @name`, rendered `-- @name`) *credits* an author and never lands
   in anyone's inbox. Sign what you write; `@mention` only when you need someone to act.
-- `sb inbox` without `--to` uses `identity` from config or `SB_IDENTITY`.
+- `sb inbox` without `--to` uses `identity` from config or `SB_IDENTITY`. As of 1.9.1
+  `sb config show` **does** list the resolved `identity` under `server.identity`, with its
+  source. With `--format json` and an empty inbox it prints `No mentions.` *before* the
+  `[]`, which breaks a naive `| jq`.
+- Run a command as a different account without touching the user config by exporting
+  `SB_TOKEN` and `SB_IDENTITY` (both show as `env:` in `sb config show`). Barbossa's live
+  at `~/.config/sb-barbossa/env`: `. ~/.config/sb-barbossa/env && sb ...`. Prefer this to
+  `XDG_CONFIG_HOME`, which also redirects git's config lookup (`~/.config/git` exists) and
+  silently detaches it for the whole process chain.
 - `sb page append` and `sb daily` write the **local** file; `sb sync` afterwards.
 
 ### Page history
@@ -161,11 +169,26 @@ sb page restore "Projects/X" --rev <hash> --yes # write old content locally, the
 ```
 
 Use it to review or roll back a bulk edit; a restore goes through normal sync conflict
-handling. `bullet.coder.cam` runs in **managed** mode (`SB_REVISIONS=managed` in the
-compose file, since 2026-09-26): SilverBullet commits changes ~30 s after edits go quiet,
-authored `SilverBullet`, so the newest seconds of an edit may not have a revision yet. The
-JSON's `mode` says `managed`; `unmanaged` or `disabled` means history won't be recorded.
-Hidden files and the tool/cache folders in the space's `.gitignore` are never committed.
+handling. `bullet.coder.cam` runs in **managed** mode, so SilverBullet commits changes
+~30 s after edits go quiet and the newest seconds of an edit may not have a revision yet.
+The JSON's `mode` says `managed`; `unmanaged` or `disabled` means history won't be
+recorded. Hidden files and the tool/cache folders in the space's `.gitignore` are never
+committed.
+
+Since the **multi-space** cut (2026-10-11) two things changed here:
+
+- `SB_REVISIONS=managed` is gone from the compose file. Revisions are **per-space config**
+  (`revisions` in the data folder's `spaces.json`, or the space's Dashboard settings). The
+  env var is still read in legacy single-space mode but is ignored in multi-space.
+  **Hand-editing `spaces.json` and omitting the `revisions` key silently defaults it to
+  `"disabled"`**, which stops recording history with no error.
+- Commits are authored by the **account that made the write** (`cam`, `barbossa`), not the
+  generic `SilverBullet` of single-space mode. Writes made by an outside process (a
+  sidecar writing straight to the bind mount) are authored `External`.
+
+The commit worker only commits writes it **observes**. A page written in the window right
+after a space-config change rebuilt the instance can sit uncommitted until something
+touches it again, and `git -C space status` will show it as dirty.
 
 ### Troubleshooting sb
 
@@ -178,6 +201,63 @@ multiple false-positive "bridge wedged" reports.)
 A genuinely wedged headless-Chrome bridge reports **`bridge_unavailable`** (HTTP 503) — distinct
 from a malformed-expression error. Probe with `sb lua '"ok"'`; if the server stays down on
 well-formed input, fall back to `zk` for search tasks — zk reads the filesystem directly.
+
+## The server: multi-space mode
+
+Since **2026-10-11** `bullet.coder.cam` runs SilverBullet 2.12.0 in **multi-space** mode
+(it was legacy single-space before). Mostly this is invisible to `sb` and `zk`, but a few
+things matter.
+
+**Layout.** `~/docker_services/silverbullet/data` is the *data folder*, mounted at `/data`,
+holding `spaces.json`, `users.json`, `server.json` and `.chrome-data/`. The markdown did
+**not** move: it is still `~/docker_services/silverbullet/space`, mounted at `/space`, and
+`spaces.json` points the space at that absolute path. So every sidecar mount and host
+script path is unchanged.
+
+**Which mode am I on?** `curl -s -o /dev/null -w '%{http_code}' localhost:6934/.dashboard`
+returns `200` in multi-space and `404` in legacy. The boot log says
+`boot mode: multi-space (spaces.json present)`.
+
+**Accounts.** `cam` (admin, so always write plus Runtime API) and `barbossa`
+(`role: write`, `runtimeApi: true`). Anonymous access is `none`: the space is invisible
+without a session. Per-account API tokens replace the old `SB_AUTH_TOKEN` env var and are
+stored **hashed**, so a token's plaintext is visible only once at creation.
+
+**The space is bound at the server root** (`binding.prefix: ""`). This is load-bearing:
+`sb` can override the server URL (`SB_SERVER_URL`) but has **no way to select a
+server-side space**, so binding the space to a path prefix would strand the CLI entirely.
+
+**Admin API** lives under `/.dashboard`, not `/api`:
+
+| Action | Call |
+|---|---|
+| session identity | `GET /.dashboard/api/session` |
+| list / create accounts | `GET`/`POST /.dashboard/api/admin/users` |
+| issue a token | `POST /.dashboard/api/admin/users/<name>/tokens` `{name}` (plaintext returned once) |
+| read space config | `GET /.dashboard/api/admin/spaces` |
+| partial space edit | `PATCH /.dashboard/api/admin/spaces/<id>` (`PUT` wants the whole object and 422s) |
+| log in | `POST /.auth`, form `username`/`password`/`next` |
+
+**Per-account Chrome runtimes.** The Runtime API that `sb lua` and `sb query` depend on
+runs one headless Chrome per (account, space), each in its own
+`data/.chrome-data/runtime-<random6>/`. Consequences:
+
+- A first call from a new account cold-indexes the whole space, roughly **4 minutes** on
+  this ~3300-page space, during which `sb lua` reports
+  `could not connect to .../.runtime/lua`. That is normal, not a wedged bridge.
+- The directory name is random, so a warm profile **cannot** be pre-seeded.
+- **Any change to a space's config rebuilds the instance and tears down its runtimes**, so
+  `sb lua` 503s for a few minutes after an admin edit. Check
+  `GET /.dashboard/api/admin/runtimes` for `status: starting` vs `running`.
+- Two accounts' runtimes coexist fine (~140M of profile each); they do not evict each other.
+
+**`Library/Std` is not on disk.** Its ~70 pages are embedded in the server binary and
+served over the API, so `fd`/`rg` across `~/silverbullet` will never find them. Read them
+with `curl -H "Authorization: Bearer $TOKEN" .../.fs/Library/Std/<page>.md`. The index
+therefore reports more pages than there are `.md` files on disk, which is expected.
+
+**Shell is per-space and off by default** since 2.10 (`shell.enabled` in `spaces.json`).
+It is enabled for this space; a `whitelist` alone does not turn it on.
 
 ## The `zk` CLI
 
@@ -390,3 +470,29 @@ Things that have tripped up agents before — avoid repeating these:
 
 4. **Trying `sb query` when the server is down.** Fall back to `zk` — it works offline
    against the local filesystem.
+
+5. **Running a Readwise sync to "test" something.** `Readwise: Sync Book` / `Sync All` is
+   **not idempotent**. It rewrites each highlight's `readwiseNote` from the Readwise API's
+   copy, which clobbers any wikilink paths that were fixed up locally. Measured on
+   `Readwise/Mastery` on 2026-10-11: full-path links fell from **220 to 140**, e.g.
+   `[[Z/Active Experimentation]]` became `[[Active Experimentation]]` — converting resolved
+   links back into aspiring ones, undoing exactly what `fix-links.py` exists to do.
+   `## My Notes` genuinely is preserved, as the page claims; only `readwiseNote` is
+   overwritten. Assume `Zotero: Sync` has the same shape and don't fire it casually either.
+
+   **Recovery is counter-intuitive:** managed revisions commits the damaged version within
+   ~30 s, so `git checkout -- <page>` restores the **damaged** copy. Go back one commit:
+
+   ```bash
+   git -C space show '<sync-commit>^:Readwise/<Book>.md' > 'space/Readwise/<Book>.md'
+   ```
+
+   Verify by counting `rg -c '\[\[Z/|\[\[Readwise/'` against the pre-sync commit. Grepping
+   two or three sample link names is not enough — it produced a false "reverted cleanly"
+   reading once.
+
+6. **Reading `#` on a widget return value as a count.** Space Lua widget helpers return
+   tables with only string keys (`_isWidget`, `markdown`/`html`), so `#someWidget(...)` is
+   always `0` and looks like "no results". Inspect `type(...)` and the `.markdown` /
+   `.html` field instead. Relatedly, some widget functions 500 under `sb lua` while working
+   fine in the browser — that is a known headless-only limitation, not a breakage.

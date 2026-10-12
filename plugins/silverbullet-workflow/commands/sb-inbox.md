@@ -57,7 +57,9 @@ So `sb inbox` works without `--to` on this machine, add a top-level key to `~/.c
 identity = "@cam"
 ```
 
-`sb inbox` with no `--to` confirms it resolved (exit `2` means it didn't; `sb config show` doesn't list `identity` as of 1.9.0). An agent's own environment can set `SB_IDENTITY=@barbossa` instead. Cam's machines have `identity = "@cam"` set.
+`sb inbox` with no `--to` confirms it resolved (exit `2` means it didn't). As of **1.9.1** `sb config show` *does* list the resolved identity under `server.identity`, with its source, so prefer that over guessing. An agent's own environment can set `SB_IDENTITY=@barbossa` instead; Barbossa's cron jobs do exactly that via `. ~/.config/sb-barbossa/env`. Cam's machines have `identity = "@cam"` set.
+
+With `--format json` and an empty inbox, `sb inbox` prints `No mentions.` *before* the `[]`, so a bare `| jq` fails on it.
 
 ## See also
 
