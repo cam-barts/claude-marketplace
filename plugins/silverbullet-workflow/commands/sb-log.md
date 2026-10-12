@@ -9,24 +9,24 @@ Append a timestamped entry to today's Captain's Log (`Journals/Captains Log/YYYY
 
 - `task` (required) — one line: what the work was. Link the page it touched: `Fix the ETag path ([[Repositories/sb-cli]])`.
 - `state` (optional, default: `done`) — `done` | `in progress` | `blocked` | `awaiting <thing>` (e.g. `awaiting signature`).
-- `author` (optional) — who's writing. Defaults to `claude (interactive session with Cam)` in an interactive session. Autonomous runs use their own name (`barbossa-worker`, `claude-code`).
+- `author` (optional) — who's writing. **Always a barbossa identity**: `barbossa (interactive session with Cam)` for interactive work, `barbossa-worker` for autonomous runs. Keep the parenthetical so the interactive-vs-autonomous distinction survives. Do not sign log entries as `claude` or `claude-code`; that is the harness, not Cam's agent.
 
 The body — what happened, what was found, what's left — is composed from the session, not passed as an argument.
 
 ## Entry format
 
 ```markdown
-## 14:05 — claude-code
+## 14:05 — barbossa-worker
 **Task:** Integrate the edge server features into `sb-cli` ([[Repositories/sb-cli]])
 **State:** awaiting signature
 
 Prose paragraphs: what was done, what was surprising, what was verified and how.
 Name commits, paths, and counts. Link the pages touched.
 
-- [ ] Follow-up that needs Cam #agent [assignee: cam] [author: claude-code] [created: 2026-09-04] [priority: medium]
+- [ ] Follow-up that needs Cam #agent [assignee: cam] [author: barbossa] [created: 2026-09-04] [priority: medium]
 ```
 
-- Heading: `## HH:MM — author` (local 24h time). Interactive sessions use a hyphen and a parenthetical: `## 03:40 - claude (interactive session with Cam)`.
+- Heading: `## HH:MM — author` (local 24h time). Interactive sessions use a hyphen and a parenthetical: `## 03:40 - barbossa (interactive session with Cam)`.
 - `**Tier:**` appears only on Barbossa's autonomous entries (`opus → claude-opus-5`); leave it out otherwise.
 - Follow-ups for Cam are **tasks** at the end of the entry, with the full attribute set — see [`task_patterns.md`](../skills/silverbullet-workflow/references/task_patterns.md). This is how work gets handed back; it's what `/sb-tasks` pulls.
 - Don't `--sign` log entries: the heading already names the author.
