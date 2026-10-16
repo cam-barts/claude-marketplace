@@ -1,1 +1,0 @@
-# Pytest standards plugin tests

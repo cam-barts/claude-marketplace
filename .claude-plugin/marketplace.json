@@ -1,24 +1,12 @@
 {
   "name": "cam-marketplace",
   "version": "0.3.0",
-  "description": "Personal Claude Code plugin marketplace with opinionated, quality-enforcing plugins for documentation, testing, and static analysis",
+  "description": "Personal Claude Code plugin marketplace for working with Cam's SilverBullet knowledge base",
   "owner": {
     "name": "cam-barts"
   },
   "repository": "https://github.com/cam-barts/claude-marketplace",
   "plugins": [
-    {
-      "name": "documentation-standards",
-      "source": "./plugins/documentation-standards"
-    },
-    {
-      "name": "pytest-standards",
-      "source": "./plugins/pytest-standards"
-    },
-    {
-      "name": "static-analysis",
-      "source": "./plugins/static-analysis"
-    },
     {
       "name": "silverbullet",
       "source": "./plugins/silverbullet"
