@@ -1,25 +1,24 @@
 ---
 name: silverbullet
 description: |
-  How to work with Cam's SilverBullet knowledge base and its CLI tools (sb, zk).
-  Use this skill whenever the task involves: SilverBullet pages, notes, or space content;
-  wikilinks, backlinks, or aspiring notes; the zk CLI for searching, tagging, link analysis,
-  or graph traversal; the sb CLI for querying, syncing, or running Space Lua; note organization,
-  tag management, or knowledge graph analysis; the Readwise or Zotero integrations in SB;
-  or any mention of ~/silverbullet, bullet.coder.cam,
-  "my notes", "my knowledge base", or "my wiki". Also trigger when the user asks about
-  links between notes, orphan pages, note connections, or wants to search/filter their notes.
+  How Cam's SilverBullet knowledge base and its CLI tools (sb, zk) work, and what the space contains.
+  Use it for: SilverBullet pages, notes, or space content; wikilinks, backlinks, aspiring notes, orphans;
+  zk for searching, tagging, link analysis, or graph traversal; sb for querying the index, syncing,
+  page history, or running Space Lua; tags and space layout; the Readwise or Zotero integrations and
+  `#highlight` objects; the multi-space server at bullet.coder.cam; or any mention of ~/silverbullet,
+  "my notes", "my knowledge base", or "my wiki". Cam's conventions for tasks, hand-offs, the Captain's
+  Log, and new project docs are in silverbullet-workflow; a gardening/connection-hunting round is
+  serendipity-gardening; enriching one Zotero paper is enrich-paper.
 ---
 
 # SilverBullet Knowledge Base
 
-Cam's knowledge base runs on SilverBullet v2 with Space Lua scripting. Two CLI tools
-and a link-fixing script operate against the space at `~/silverbullet/`. This skill
-tells you when and how to use each one.
+Cam's knowledge base runs on SilverBullet v2 with Space Lua scripting, in `~/silverbullet/`. The
+shell needs `ZK_NOTEBOOK_DIR=~/silverbullet` and `~/.local/bin` on PATH; the login profile sets both.
+
+Last verified against: claude-opus-5-5, 2026-11-16.
 
 ## Quick Reference: Which Tool for What
-
-Pick the right tool for the job — reaching for the wrong one wastes time:
 
 | I need to… | Use |
 |-----------|-----|
@@ -37,16 +36,6 @@ Pick the right tool for the job — reaching for the wrong one wastes time:
 | Sync file changes to the server | `sb sync` |
 | Append to a page, crediting the author | `sb page append NAME --content … --sign @name`, then `sb sync` |
 | Edit note content directly | Edit files in `~/silverbullet/`, then `sb sync` |
-
-## Environment Setup
-
-Both CLI tools need environment variables that come from `~/.profile`. Set these before
-running commands in any shell session:
-
-```bash
-export ZK_NOTEBOOK_DIR="$HOME/silverbullet"
-export PATH="$HOME/.local/bin:$PATH"
-```
 
 ## The `sb` CLI
 
@@ -81,8 +70,8 @@ sb sync status       # JSON: modified/new/deleted/conflicts/marker_conflicts/rea
 sb sync --dry-run    # preview actions without executing
 ```
 
-A push no longer aborts on one bad file: read-only (403) paths and per-file failures are
-reported at the end while every other upload still lands (`0 read-only, 0 failed` in the summary).
+A push reports read-only (403) paths and per-file failures at the end while every other upload
+still lands (`0 read-only, 0 failed` in the summary).
 
 **Conflicts.** A conflicted file's local copy is stashed under `~/.sb/conflicts/`.
 
@@ -127,7 +116,7 @@ Then query:
 
 ```bash
 sb query 'from index.tag "highlight" limit 5'
-sb query 'from index.tag "annotation" where page == "Zotero/Some Paper" limit 10'
+sb query 'from index.tag "highlight" where page == "Zotero/Some Paper" limit 10'
 sb query 'from index.tag "page" where zoteroKey select name, zoteroKey'
 ```
 
@@ -141,14 +130,14 @@ field returns a flat array; comparison is `==` — a single `=` is a syntax erro
 sb links "Z/Apprenticeship"            # backlinks, from the server's relation index
 sb links "Z/Apprenticeship" --from     # outgoing links
 sb inbox --to @cam                     # open @mentions addressed to Cam
-sb page append "Projects/X" --content "Checked the backups." --sign @claude-code
+sb page append "Projects/X" --content "Checked the backups." --sign @barbossa
 ```
 
 - An **`@mention`** *addresses* someone: it lands in their Mention Inbox until the task it
   sits in is done.
 - A **signature** (`--sign @name`, rendered `-- @name`) *credits* an author and never lands
   in anyone's inbox. Sign what you write; `@mention` only when you need someone to act.
-- `sb inbox` without `--to` uses `identity` from config or `SB_IDENTITY`. As of 1.9.1
+- `sb inbox` without `--to` uses `identity` from config or `SB_IDENTITY`. As of 1.9.1 (re-check on upgrade)
   `sb config show` **does** list the resolved `identity` under `server.identity`, with its
   source. With `--format json` and an empty inbox it prints `No mentions.` *before* the
   `[]`, which breaks a naive `| jq`.
@@ -175,20 +164,8 @@ The JSON's `mode` says `managed`; `unmanaged` or `disabled` means history won't 
 recorded. Hidden files and the tool/cache folders in the space's `.gitignore` are never
 committed.
 
-Since the **multi-space** cut (2026-10-11) two things changed here:
-
-- `SB_REVISIONS=managed` is gone from the compose file. Revisions are **per-space config**
-  (`revisions` in the data folder's `spaces.json`, or the space's Dashboard settings). The
-  env var is still read in legacy single-space mode but is ignored in multi-space.
-  **Hand-editing `spaces.json` and omitting the `revisions` key silently defaults it to
-  `"disabled"`**, which stops recording history with no error.
-- Commits are authored by the **account that made the write** (`cam`, `barbossa`), not the
-  generic `SilverBullet` of single-space mode. Writes made by an outside process (a
-  sidecar writing straight to the bind mount) are authored `External`.
-
-The commit worker only commits writes it **observes**. A page written in the window right
-after a space-config change rebuilt the instance can sit uncommitted until something
-touches it again, and `git -C space status` will show it as dirty.
+Multi-space changed where revisions are configured and who commits are authored by; see
+[`references/server_multispace.md`](references/server_multispace.md#revisions-in-multi-space).
 
 ### Troubleshooting sb
 
@@ -202,213 +179,34 @@ A genuinely wedged headless-Chrome bridge reports **`bridge_unavailable`** (HTTP
 from a malformed-expression error. Probe with `sb lua '"ok"'`; if the server stays down on
 well-formed input, fall back to `zk` for search tasks — zk reads the filesystem directly.
 
-## The server: multi-space mode
+## The server
 
-Since **2026-10-11** `bullet.coder.cam` runs SilverBullet 2.12.0 in **multi-space** mode
-(it was legacy single-space before). Mostly this is invisible to `sb` and `zk`, but a few
-things matter.
-
-**Layout.** `~/docker_services/silverbullet/data` is the *data folder*, mounted at `/data`,
-holding `spaces.json`, `users.json`, `server.json` and `.chrome-data/`. The markdown did
-**not** move: it is still `~/docker_services/silverbullet/space`, mounted at `/space`, and
-`spaces.json` points the space at that absolute path. So every sidecar mount and host
-script path is unchanged.
-
-**Which mode am I on?** `curl -s -o /dev/null -w '%{http_code}' localhost:6934/.dashboard`
-returns `200` in multi-space and `404` in legacy. The boot log says
-`boot mode: multi-space (spaces.json present)`.
-
-**Accounts.** `cam` (admin, so always write plus Runtime API) and `barbossa`
-(`role: write`, `runtimeApi: true`). Anonymous access is `none`: the space is invisible
-without a session. Per-account API tokens replace the old `SB_AUTH_TOKEN` env var and are
-stored **hashed**, so a token's plaintext is visible only once at creation.
-
-**The space is bound at the server root** (`binding.prefix: ""`). This is load-bearing:
-`sb` can override the server URL (`SB_SERVER_URL`) but has **no way to select a
-server-side space**, so binding the space to a path prefix would strand the CLI entirely.
-
-**Admin API** lives under `/.dashboard`, not `/api`:
-
-| Action | Call |
-|---|---|
-| session identity | `GET /.dashboard/api/session` |
-| list / create accounts | `GET`/`POST /.dashboard/api/admin/users` |
-| issue a token | `POST /.dashboard/api/admin/users/<name>/tokens` `{name}` (plaintext returned once) |
-| read space config | `GET /.dashboard/api/admin/spaces` |
-| partial space edit | `PATCH /.dashboard/api/admin/spaces/<id>` (`PUT` wants the whole object and 422s) |
-| log in | `POST /.auth`, form `username`/`password`/`next` |
-
-**Per-account Chrome runtimes.** The Runtime API that `sb lua` and `sb query` depend on
-runs one headless Chrome per (account, space), each in its own
-`data/.chrome-data/runtime-<random6>/`. Consequences:
-
-- A first call from a new account cold-indexes the whole space, roughly **4 minutes** on
-  this ~3300-page space, during which `sb lua` reports
-  `could not connect to .../.runtime/lua`. That is normal, not a wedged bridge.
-- The directory name is random, so a warm profile **cannot** be pre-seeded.
-- **Any change to a space's config rebuilds the instance and tears down its runtimes**, so
-  `sb lua` 503s for a few minutes after an admin edit. Check
-  `GET /.dashboard/api/admin/runtimes` for `status: starting` vs `running`.
-- Two accounts' runtimes coexist fine (~140M of profile each); they do not evict each other.
-
-**`Library/Std` is not on disk.** Its ~70 pages are embedded in the server binary and
-served over the API, so `fd`/`rg` across `~/silverbullet` will never find them. Read them
-with `curl -H "Authorization: Bearer $TOKEN" .../.fs/Library/Std/<page>.md`. The index
-therefore reports more pages than there are `.md` files on disk, which is expected.
-
-**Shell is per-space and off by default** since 2.10 (`shell.enabled` in `spaces.json`).
-It is enabled for this space; a `whitelist` alone does not turn it on.
+Since 2026-10-11 `bullet.coder.cam` runs SilverBullet in **multi-space** mode. It is mostly
+invisible to `sb` and `zk`; the layout, accounts, admin API, per-account Chrome runtimes (a new
+account's first `sb lua` cold-indexes for minutes, which is not a wedge), and the embedded
+`Library/Std` pages are in [`references/server_multispace.md`](references/server_multispace.md).
 
 ## The `zk` CLI
 
-A command-line tool that indexes the SilverBullet space and provides fast search, link
-traversal, tag management, and graph analysis. It reads from `~/silverbullet/`
-(set via `ZK_NOTEBOOK_DIR`). The config lives at `~/.config/zk/config.toml` and
-excludes `Library/` from indexing.
+zk indexes the space for fast search, link traversal, tags, and graph analysis. Config is
+`~/.config/zk/config.toml` and excludes `Library/`. After significant changes run `zk index`
+(`--force` for a full rebuild); "database is locked" means another index is still running
+(`lsof ~/silverbullet/.zk/notebook.db`).
 
-### Reindexing
-
-After significant changes to the space, reindex so zk has current data:
+The flags worth knowing beyond `zk list --help`:
 
 ```bash
-zk index          # incremental (fast)
-zk index --force  # full rebuild
-```
-
-**If zk errors with "database is locked"**, another `zk index` process is still running.
-Find and kill it with `lsof ~/silverbullet/.zk/notebook.db` or wait for it to finish.
-
-### Searching notes
-
-```bash
-# Full-text search (default, tokenized — matches inflections)
-zk list --match "deliberate practice"
-
-# Search with operators
-zk list --match "tesla OR edison"
-zk list --match "NOT journal"
-zk list --match "title: mastery"
-
-# Exact match (good for special chars, wikilinks)
-zk list --match "[[Confirmation Bias]]" --match-strategy exact
-
-# Regex match
-zk list --match "^## .+" --match-strategy re
-
-# Scope to a directory
-zk list Readwise/
-zk list Z/
-```
-
-### Output formatting
-
-Use `-f` with predefined formats or custom templates. Custom templates use Handlebars
-syntax with double-quoted strings in bash (single quotes get parsed by the shell):
-
-```bash
-zk list -f oneline --limit 10
-zk list -f json --limit 5
-zk list -f "{{title}}" --limit 5
-```
-
-**Template variables:** `filename`, `filename-stem`, `path`, `abs-path`, `title`, `link`,
-`lead`, `body`, `raw-content`, `snippets`, `word-count`, `tags`, `metadata`, `created`,
-`modified`, `checksum`.
-
-Use `--quiet` (`-q`) to suppress the "Found N notes" footer.
-
-### Tag operations
-
-```bash
-zk tag list                              # all tags with counts
-zk list --tag "bias"                     # notes with this tag
-zk list --tag "bias, fallacy"            # AND (both)
-zk list --tag "bias OR fallacy"          # OR (either)
-zk list --tag "NOT done"                 # exclude
-zk list --tag "readwise/books"           # hierarchical
-zk list --tag "year/201*"               # glob patterns
-zk list --tagless                        # untagged notes
-zk tag list -f json                      # JSON output
-```
-
-### Link analysis
-
-This is zk's most powerful feature — traversing the link graph.
-
-```bash
-# Inbound links (who links TO this note)
-zk list --link-to "Readwise/Mastery.md"
-
-# Outbound links (what this note LINKS TO)
-zk list --linked-by "Readwise/Mastery.md"
-
-# Recursive traversal (follow the full link web)
-zk list --link-to "Persuasion Techniques/Confirmation Bias.md" --recursive
-zk list --linked-by "Z/Apprenticeship.md" --recursive --max-distance 2
-
-# Structural analysis
-zk list --orphan                          # no incoming links
-zk list --missing-backlink                # A→B exists but B→A doesn't
-zk list --related "Z/Confirmation Bias.md"   # share links but aren't connected
-```
-
-### Mentions
-
-Mentions find notes by title text, not explicit wikilinks. This catches unlinked references
-where a note's title appears in another note's body text.
-
-```bash
-# Notes whose titles appear in the given note
-zk list --mentioned-by "Readwise/Mastery.md"
-
-# Notes that mention the given note's title
-zk list --mention "Z/Confirmation Bias.md"
-
-# The real power: find unlinked mentions (titles mentioned but not wikilinked)
+zk list --orphan                                   # no incoming links
+zk list --missing-backlink                         # A→B exists but B→A doesn't
+zk list --related "Z/Confirmation Bias.md"         # share links but aren't connected
+zk list --mention "Z/Confirmation Bias.md" --no-link-to "Z/Confirmation Bias.md"        # unlinked mentions
 zk list --mentioned-by "Readwise/Mastery.md" --no-linked-by "Readwise/Mastery.md"
-zk list --mention "Z/Confirmation Bias.md" --no-link-to "Z/Confirmation Bias.md"
+zk graph --format json Z/ --quiet                  # {notes, links} with index-based edges
 ```
 
-### Graph output
-
-Produces a JSON representation of the note network for programmatic analysis:
-
-```bash
-zk graph --format json "Readwise/Mastery.md" --quiet
-zk graph --format json --tag "bias" --quiet
-zk graph --format json Z/ --quiet
-```
-
-Returns `{ "notes": [...], "links": [...] }` where each link has `source` and `target`
-indices into the notes array.
-
-### Date filtering and sorting
-
-```bash
-zk list --created-after "last monday"
-zk list --modified-after "2025-01-01"
-zk list --sort modified-        # most recent first (- = descending)
-zk list --sort title             # alphabetical
-zk list --sort word-count-       # longest first
-```
-
-### Practical compound queries
-
-Filters compose naturally. These are patterns that come up often:
-
-```bash
-# Orphaned concept notes (Z/ notes nobody links to)
-zk list Z/ --orphan
-
-# Notes mentioning "mastery" that aren't already linked
-zk list --mention "Readwise/Mastery.md" --no-link-to "Readwise/Mastery.md"
-
-# Recently touched bias/fallacy notes
-zk list --tag "bias OR fallacy" --modified-after "last month" --sort modified-
-
-# Readwise articles modified this week
-zk list Readwise/ --tag "readwise/articles" --modified-after "last monday"
-```
+A multi-word `--match` phrase has silently returned zero (verified 2026-11-16); use single words or
+`--match-strategy re` with `.` between words. More recipes (operators, tags, templates, dates):
+[`references/zk_recipes.md`](references/zk_recipes.md).
 
 ## Space structure
 
@@ -426,12 +224,17 @@ zk list Readwise/ --tag "readwise/articles" --modified-after "last monday"
 | `People/` | People pages |
 | `Sources/` | Source references |
 
-## Standard workflow for making changes
+## Editing the space
 
-1. Edit files in `~/silverbullet/`
-2. Run `sb sync` to push changes to the server
-3. If you changed Space Lua code, the user needs to run `System: Reload` from the SB command palette
-4. Run `zk index` if you need zk to see the changes
+Edit files in `~/silverbullet/`, then `sb sync`. If you changed Space Lua, Cam needs to run
+`System: Reload` from the command palette (or `sb lua 'system.loadSpaceScripts()'`). Run `zk index`
+if zk needs to see the change.
+
+Short (aspiring) wikilinks that should point at full paths are fixed with
+`~/docker_services/silverbullet/fix-links.py` (dry run by default):
+`cd ~/docker_services/silverbullet && uv run fix-links.py --space ~/silverbullet fix` (add `--apply`
+to write; `resolve` maps an aspiring note to an existing page). It also rewrites `Readwise/` pages,
+which are other people's words, so read the plan first.
 
 ## Tags
 
@@ -455,44 +258,20 @@ SilverBullet v2 indexes fenced code blocks as queryable data objects:
 
 Query them with `sb query` or in Space Lua with `query[[from index.tag "highlight" where ...]]`.
 
-## Common Pitfalls
+## Pitfalls
 
-Things that have tripped up agents before — avoid repeating these:
+- **Readwise and Zotero syncs are not idempotent.** Don't fire one to "test" something; it
+  rewrites locally fixed links. Measured damage and the counter-intuitive recovery:
+  [`references/readwise_sync_pitfall.md`](references/readwise_sync_pitfall.md).
+- **Reading `#` on a widget return value as a count.** Space Lua widget helpers return
+  tables with only string keys (`_isWidget`, `markdown`/`html`), so `#someWidget(...)` is
+  always `0` and looks like "no results". Inspect `type(...)` and the `.markdown` /
+  `.html` field instead. Relatedly, some widget functions 500 under `sb lua` while working
+  fine in the browser — that is a known headless-only limitation, not a breakage.
 
-1. **Forgetting to `sb sync` after edits.** Edits to `~/silverbullet/` don't reach the
-   server until you sync. If you skip the sync, the server's view drifts from local.
+## Maintaining this skill
 
-2. **Forgetting environment variables.** Every new shell session needs `ZK_NOTEBOOK_DIR`
-   and `PATH` set. Without them, `zk` won't find the notebook and `sb` won't be on PATH.
-
-3. **Running `zk index --force` while another index is running.** The SQLite database
-   locks. Check with `lsof` before forcing a reindex.
-
-4. **Trying `sb query` when the server is down.** Fall back to `zk` — it works offline
-   against the local filesystem.
-
-5. **Running a Readwise sync to "test" something.** `Readwise: Sync Book` / `Sync All` is
-   **not idempotent**. It rewrites each highlight's `readwiseNote` from the Readwise API's
-   copy, which clobbers any wikilink paths that were fixed up locally. Measured on
-   `Readwise/Mastery` on 2026-10-11: full-path links fell from **220 to 140**, e.g.
-   `[[Z/Active Experimentation]]` became `[[Active Experimentation]]` — converting resolved
-   links back into aspiring ones, undoing exactly what `fix-links.py` exists to do.
-   `## My Notes` genuinely is preserved, as the page claims; only `readwiseNote` is
-   overwritten. Assume `Zotero: Sync` has the same shape and don't fire it casually either.
-
-   **Recovery is counter-intuitive:** managed revisions commits the damaged version within
-   ~30 s, so `git checkout -- <page>` restores the **damaged** copy. Go back one commit:
-
-   ```bash
-   git -C space show '<sync-commit>^:Readwise/<Book>.md' > 'space/Readwise/<Book>.md'
-   ```
-
-   Verify by counting `rg -c '\[\[Z/|\[\[Readwise/'` against the pre-sync commit. Grepping
-   two or three sample link names is not enough — it produced a false "reverted cleanly"
-   reading once.
-
-6. **Reading `#` on a widget return value as a count.** Space Lua widget helpers return
-   tables with only string keys (`_isWidget`, `markdown`/`html`), so `#someWidget(...)` is
-   always `0` and looks like "no results". Inspect `type(...)` and the `.markdown` /
-   `.html` field instead. Relatedly, some widget functions 500 under `sb lua` while working
-   fine in the browser — that is a known headless-only limitation, not a breakage.
+Taste here is small and durable: sign vs mention, lean tags, AI highlights are not Cam's. Most of
+the rest is environment fact (sb version, server mode, counts), dated where it was measured;
+`sb <command> --help` beats this page when they disagree. Prune what a newer model or a newer `sb`
+makes unnecessary.
