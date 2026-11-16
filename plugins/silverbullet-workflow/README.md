@@ -58,7 +58,7 @@ Covers:
 
 ## Version
 
-0.7.2
+0.7.3
 
 ## Attribution
 

@@ -98,6 +98,9 @@ link pays. Rank them — call out the find.
 
 ## Worked examples
 
+Illustrative, from past rounds (2026-06 to 2026-08). They show the voice; don't copy their shapes,
+and vary section depth by what the draw gives you.
+
 **A connection that landed:**
 
 ```markdown

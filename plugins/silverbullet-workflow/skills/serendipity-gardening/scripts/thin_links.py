@@ -1,4 +1,7 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# ///
 """Rank SilverBullet pages by inbound wikilink count — thinnest first.
 
 Orphan mode for the serendipity-gardening ritual: surfaces the notes that
