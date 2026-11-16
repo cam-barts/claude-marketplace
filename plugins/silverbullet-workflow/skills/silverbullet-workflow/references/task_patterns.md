@@ -66,12 +66,12 @@ stable and is the durable fix.
 A task is a Markdown checklist bullet with attributes inline:
 
 ```markdown
-- [ ] Add `192.168.1.88  bullet.coder.cam` to `/etc/hosts` on Warrig … #agent [assignee: cam] [author: claude-code] [created: 2026-09-04] [priority: low]
-- [/] Audit Windmill variables integrity [assignee: barbossa] [priority: high] [wip_by: local_9402e31d] [wip_at: 2026-05-20T14:00:00Z]
-- [x] Phase 6: hybrid embedding layer via Ollama [assignee: barbossa] [completed: 2026-05-21]
+- [ ] Add `192.168.1.88  bullet.coder.cam` to `/etc/hosts` on Warrig … @cam #agent [author: barbossa] [created: 2026-09-04] [priority: low]
+- [/] Audit Windmill variables integrity @barbossa #agent [priority: high] [wip_by: local_9402e31d] [wip_at: 2026-05-20T14:00:00Z]
+- [x] Phase 6: hybrid embedding layer via Ollama @barbossa #agent [completed: 2026-05-21]
 ```
 
-Cam writes attributes as `[key: value]` **with a space**; `[key:value]` also indexes the same way, but any grep has to allow both (`\[assignee: ?cam\]`). Bullets may be `-` or `*`.
+Cam writes attributes as `[key: value]` **with a space**; `[key:value]` also indexes the same way, but any grep has to allow both (`\[key: ?value\]`). Bullets may be `-` or `*`.
 
 States:
 
@@ -84,7 +84,7 @@ Attributes (inline `[key: value]`, all optional):
 
 - `[assignee: cam]` / `[assignee: barbossa]` — **legacy** owner field. Read it on old
   tasks; write an `@name` mention instead. See the section above.
-- `[author: claude-code]` / `[author: barbossa-worker]` — who filed it, when that isn't the owner
+- `[author: barbossa]` / `[author: barbossa-worker]`: who filed it, when that isn't the owner (older tasks say `claude-code`; don't write that)
 - `[priority: high|medium|low]` — sort key
 - `[created: YYYY-MM-DD]` — when the task was filed
 - `[completed: YYYY-MM-DD]` — when it closed
@@ -94,56 +94,35 @@ Tags: `#agent` marks a task an agent filed for a human (the handoff pattern belo
 
 ## The correct query
 
-SilverBullet indexes tasks as `index.tag "task"` objects with fields including `done: bool`, `state: " "/"x"/"~"`, `assignee`, `priority`, `created`, `name`, `page`, `pos`. **There is no `status` field.**
+SilverBullet indexes tasks as `index.tag "task"` objects with fields including `done: bool`, `state`, `assignee`, `recipients` (present only when the task carries a mention), `priority`, `created`, `name`, `page`, `pos`. **There is no `status` field**, so `status == "open"` returns empty silently; `done == false` is the open filter.
 
-The right way to pull open tasks assigned to barbossa:
-
-```bash
-sb query 'from index.tag "task" where assignee == "barbossa" and done == false and not table.includes(itags, "meta/template/slash") order by priority desc, created desc'
-```
-
-The `not table.includes(itags, "meta/template/slash")` exclusion filters out template scaffolding so example tasks inside slash-command templates don't show up in real work pulls.
-
-Substitute `assignee == "cam"` for Cam's tasks, or drop the assignee filter to see everything.
-
-For the **mention-first** convention, match the recipient instead, and fall back to the
-legacy attribute so older tasks still show up:
+The canonical query, used by the skill, `/sb-tasks`, and `/sb-inbox`. Match the mention, fall back to the legacy attribute so older tasks still show up:
 
 ```bash
-sb query 'from index.tag "task" where done == false and (table.includes(recipients, "@cam") or assignee == "cam") and not table.includes(itags, "meta/template/slash") order by priority desc, created desc'
+sb query 'from index.tag "task" where (table.includes(recipients, "@cam") or assignee == "cam") and done == false and not table.includes(itags, "meta/template/slash") order by priority desc, created desc'
 ```
 
-`recipients` is only present on objects carrying a mention, so guard it rather than
-assuming the field exists. Remember this returns only **tagged** tasks, by design — that is
-the whole work-item set, not a partial view. Untagged checkboxes are deliberately absent.
+Substitute `barbossa` (both places) for Barbossa's set, or drop the ownership clause to see everything. The `meta/template/slash` exclusion keeps example tasks inside slash templates out of real pulls. Matching on `assignee` alone misses every mention-only task (on 2026-11-16: 174 of Cam's 234 open tasks found, 60 missed).
 
-## The query that DOES NOT work
-
-```bash
-# WRONG — there is no `status` field. Returns {} silently.
-sb query '... where status == "open" or status == "in_progress" ...'
-```
-
-An earlier version of this skill used the `status ==` form and was the source of multiple days of false "SB index lag" reports. Two days of Barbossa fires fell through to filesystem-grep mode because the query returned empty — not from index lag, from a non-existent field. Cleaned up 2026-05-22.
+The result is only **tagged** tasks, by design: that is the whole work-item set. Untagged checkboxes are deliberately absent.
 
 ## Pulling from the filesystem
 
-When you don't want to depend on the SB server (or want a sanity-check against the index):
+When you don't want to depend on the SB server, or want a sanity check against the index:
 
 ```bash
-grep -rEn '^\s*[-*]\s*\[ \].*\[assignee: ?cam\]' ~/silverbullet/ 2>/dev/null \
-  | head -50
+rg -n '^\s*[-*] \[ \].*(@cam\b|\[assignee: ?cam\])' ~/silverbullet/
 ```
 
-This catches open `- [ ]` / `* [ ]` bullets assigned to Cam, including the handoff tasks agents leave in the Captain's Log. Replace `cam` with `barbossa` for Barbossa's set.
+This catches open bullets owned by Cam either way, including the handoff tasks agents leave in the Captain's Log, but also untagged checkboxes the index rightly skips. Replace `cam` with `barbossa` for Barbossa's set.
 
 ## Tasks vs bullets
 
 A task implies **action** and an **owner**. A bullet is anything that doesn't satisfy both.
 
-- ✅ Task: `- [ ] Confirm Meilisearch data dir is in borgmatic [assignee: cam]` — there is a specific action and someone owns it
+- ✅ Task: `- [ ] Confirm Meilisearch data dir is in borgmatic @cam #agent`: there is a specific action and someone owns it
 - ❌ Not a task: `- Consider mxbai-embed-large after a week of use` — this is a consideration, not committed work; if it stays a bullet it's clearer
-- ✅ Task: `- [ ] Bisect remaining plugs for headless-Chrome readiness [assignee: barbossa]` — specific action, owned
+- ✅ Task: `- [ ] Bisect remaining plugs for headless-Chrome readiness @barbossa #agent`: specific action, owned
 - ❌ Not a task: `- The bridge wedge might be silversearch` — observation, not action
 
 Don't promote considerations to tasks just because they're written down. Bullets are fine for thinking; tasks are commitments.
@@ -153,7 +132,7 @@ Don't promote considerations to tasks just because they're written down. Bullets
 When an agent finishes work that needs a human step, it ends its Captain's Log entry with a task for Cam, carrying the full context needed to act without re-reading the session:
 
 ```markdown
-- [ ] Sign the 31 commits on branch `feat/edge-integration` in `~/git_local/sb-cli`, then merge to main. … #agent [assignee: cam] [author: claude-code] [created: 2026-09-04] [priority: medium]
+- [ ] Sign the 31 commits on branch `feat/edge-integration` in `~/git_local/sb-cli`, then merge to main. … @cam #agent [author: barbossa] [created: 2026-09-04] [priority: medium]
 ```
 
 Rules that keep these useful:
@@ -161,7 +140,7 @@ Rules that keep these useful:
 - **Say what, where, and how** — repo path, branch, commit, the exact command if there is one.
 - **Re-checks annotate, they don't duplicate.** A later session that finds the task still open appends `**[barbossa YYYY-MM-DD re-check]** what changed` to the same line.
 - **Closing** flips `[ ]` → `[x]`, appends `**[who YYYY-MM-DD]** Done: how` and `[completed: YYYY-MM-DD]`.
-- An `@cam` mention in the task is optional: it also surfaces the task in Cam's Mention Inbox (`sb inbox`), and it drops out of the inbox once the task is done.
+- The `@cam` mention is what makes it Cam's: it surfaces the task in his Mention Inbox (`sb inbox`) and in the canonical query, and drops out of the inbox once the task is done.
 
 ### The unsigned-commit handoff
 
@@ -192,5 +171,4 @@ This makes the audit trail across the log + project doc consistent.
 ## See also
 
 - The companion `silverbullet` plugin's SKILL.md — covers the `sb query` syntax in more depth
-- `/sb-tasks` slash command — runs the corrected query and renders the result
-- `[[Projects/SilverBullet Chrome Runtime Issue]]` in Cam's space — the wedge investigation that was over-reported because of the malformed query
+- `/sb-tasks` slash command: runs the canonical query and renders the result

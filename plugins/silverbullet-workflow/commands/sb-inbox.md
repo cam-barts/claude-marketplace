@@ -1,5 +1,5 @@
 ---
-description: Show what's waiting for someone — open @mentions plus open assigned tasks
+description: Show what's waiting for someone, open @mentions plus the open tasks they own
 argument-hint: [identity]
 ---
 
@@ -27,11 +27,13 @@ Answer "what's waiting for me?" in one pass: the `@mention`s addressed to an ide
    sb --no-input --format json inbox ${WHO:+--to "$WHO"}
    ```
 
-3. **Assigned tasks** — the same query `/sb-tasks` uses:
+3. **Owned tasks**: the canonical query from [`task_patterns.md`](../skills/silverbullet-workflow/references/task_patterns.md#the-correct-query), the same one `/sb-tasks` runs (mention first, legacy assignee as fallback):
 
    ```bash
-   sb --no-input --format json query "from index.tag \"task\" where assignee == \"$WHO\" and done == false and not table.includes(itags, \"meta/template/slash\") order by priority desc, created desc limit 20"
+   sb --no-input --format json query "from index.tag \"task\" where (table.includes(recipients, \"@$WHO\") or assignee == \"$WHO\") and done == false and not table.includes(itags, \"meta/template/slash\") order by priority desc, created desc limit 20"
    ```
+
+   A task carrying `@$WHO` also appears under Mentions; show it once, under Open tasks.
 
 4. **Render** two short sections, newest-relevant first, each item linked to its source page:
 
@@ -47,7 +49,7 @@ Answer "what's waiting for me?" in one pass: the `@mention`s addressed to an ide
 
 ## When to use a mention versus a task
 
-Tasks are the established handoff: `[assignee: cam]` on a `- [ ]` line, which `/sb-tasks` and this command both surface. Reach for an `@mention` when you need someone's attention on something that **isn't** a task of theirs — a question in a project doc, a review request on a page. Don't mention yourself, and don't use a mention to credit authorship: that's `--sign @name`, which never reaches an inbox.
+Work handed to someone is a tagged task with their `@name` in it (`- [ ] … @cam #agent …`), which `/sb-tasks` and this command both surface. `[assignee: cam]` is legacy: still read, never written. Use a bare `@mention` outside a task when you need someone's attention on something that **isn't** a task of theirs — a question in a project doc, a review request on a page. Don't mention yourself, and don't use a mention to credit authorship: that's `--sign @name`, which never reaches an inbox.
 
 ## Configure a default identity
 

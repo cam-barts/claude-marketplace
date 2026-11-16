@@ -70,7 +70,7 @@ How could this fail? Each item is a single sentence describing the failure mode,
 
 ### `## Tasks`
 
-Bullet list of `- [ ]` task items with `[assignee:]` and other metadata. The unit of work, separate from "Plan" (which is the structure) and "Decisions Locked In" (which is the rationale). When a task closes, flip `[x]` and optionally add `[completed:YYYY-MM-DD]`.
+Bullet list of `- [ ]` task items, each owned by an `@name` mention and carrying a channel tag (`#agent`, `#shared`) plus other metadata (see `task_patterns.md`). The unit of work, separate from "Plan" (which is the structure) and "Decisions Locked In" (which is the rationale). When a task closes, flip `[x]` and optionally add `[completed:YYYY-MM-DD]`.
 
 ### `## Decisions Locked In`
 

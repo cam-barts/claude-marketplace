@@ -39,6 +39,7 @@ Name commits, paths, and counts. Link the pages touched.
 
    ```bash
    export PATH="$HOME/.local/bin:$PATH"
+   . ~/.config/sb-barbossa/env   # write as Barbossa, not through Cam's config
    TODAY=$(date +%Y-%m-%d)
    NOW=$(date +%H:%M)
    PAGE="Journals/Captains Log/${TODAY}"

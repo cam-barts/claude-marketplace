@@ -14,7 +14,7 @@ Pull the current open task set for an assignee. Renders a short table — page, 
 
 1. **Verify `sb` is reachable first** — run `sb --no-input lua '"ok"'`. If it returns anything but `"ok"`, dispatch to `/sb-setup` instead of forcing the query. Exit `3` means auth; `1` with `bridge_unavailable` means the server's headless browser is down.
 
-2. **Build the query.** Use the **correct** filter — `done == false`, NOT `status == "open" or status == "in_progress"`. The latter is the malformed form that returns empty silently because SB tasks have no `status` field.
+2. **Build the query.** This is the canonical filter from [`task_patterns.md`](../skills/silverbullet-workflow/references/task_patterns.md#the-correct-query); keep the two in step. `done == false` is the open filter (there is no `status` field).
 
    ```bash
    ASSIGNEE="${1:-cam}"
@@ -24,8 +24,8 @@ Pull the current open task set for an assignee. Renders a short table — page, 
      FILTER='done == false and not table.includes(itags, "meta/template/slash")'
    else
      # Mention-first: match an `@name` recipient, falling back to the legacy
-   # `[assignee:]` attribute so pre-2026-10-11 tasks still appear.
-   FILTER="(table.includes(recipients, \"@$ASSIGNEE\") or assignee == \"$ASSIGNEE\") and done == false and not table.includes(itags, \"meta/template/slash\")"
+     # `[assignee:]` attribute so pre-2026-10-11 tasks still appear.
+     FILTER="(table.includes(recipients, \"@$ASSIGNEE\") or assignee == \"$ASSIGNEE\") and done == false and not table.includes(itags, \"meta/template/slash\")"
    fi
 
    sb --no-input --format json query "from index.tag \"task\" where $FILTER order by priority desc, created desc limit $LIMIT"
@@ -42,11 +42,10 @@ Pull the current open task set for an assignee. Renders a short table — page, 
 4. **Fallback to filesystem grep** if `sb query` returns `[]` AND the assignee is known to have open tasks. Don't auto-assume index lag — first verify the query syntax wasn't broken by an arg injection:
 
    ```bash
-   grep -rEn "^\s*[-*]\s*\[ \].*\[assignee: ?${ASSIGNEE}\]" ~/silverbullet/ 2>/dev/null \
-     | head -50
+   rg -n "^\s*[-*] \[ \].*(@${ASSIGNEE}\b|\[assignee: ?${ASSIGNEE}\])" ~/silverbullet/
    ```
 
-   Keep Captain's Log hits: that's where agents leave handoff tasks for Cam at the end of an entry. The optional space (`assignee: ?`) matters — Cam's tasks are written `[assignee: cam]`, and the colon-only form misses about 40% of them.
+   Keep Captain's Log hits: that's where agents leave handoff tasks for Cam at the end of an entry. The optional space in `assignee: ?` matters, since older tasks are written both ways. This also matches untagged checkboxes, which the index skips by design, so a few extra grep hits are not a mismatch.
 
    If the grep returns results but `sb query` didn't, log a "real index/filesystem mismatch" note — that's worth investigating, not a routine event.
 

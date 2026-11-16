@@ -64,7 +64,7 @@ Dispatch a search across the SB space, choosing the right tool based on what the
 | "what does X link to" | `zk list --linked-by` | Outbound links |
 | "what links to X" when zk's index may be stale (fresh machine, just synced) | `sb links "X"` (`--from` for outbound) | Server's relation index, always current |
 | "orphan notes in Z/" | `zk list Z/ --orphan` | Structural analysis |
-| "all tasks assigned to barbossa" | `sb query` (see `/sb-tasks`) | Needs the indexed view |
+| "all of barbossa's open tasks" | `sb query` (see `/sb-tasks`) | Needs the indexed view |
 | "recent edits this week" | `zk list --modified-after "last monday" --sort modified-` | Time filtering |
 
 ## See also

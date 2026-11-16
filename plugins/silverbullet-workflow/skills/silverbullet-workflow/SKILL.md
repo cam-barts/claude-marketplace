@@ -1,145 +1,117 @@
 ---
 name: silverbullet-workflow
 description: |
-  Cam's action-layer playbook for working with SilverBullet from the CLI.
-  Use this skill when the task involves: starting a new project doc (always from the Project template),
-  pulling or annotating tasks (`[assignee: cam]` or `[assignee: barbossa]`),
-  appending an entry to today's Captain's Log, checking what's waiting for someone (`sb inbox`,
-  @mentions, handoff tasks), signing an entry with `--sign`, searching the space, syncing edits and
-  resolving sync conflicts with `sb sync`, evaluating Space Lua, fixing aspiring (short-name) wikilinks,
-  or first-time CLI setup on a fresh machine.
-  Triggers on mentions of `~/silverbullet`, `bullet.coder.cam`,
-  "my SB", "my space", a project doc, a Captain's Log, an `[assignee:]` task, swabs, or any
-  `sb` or `zk` CLI invocation. Do NOT use for Space Lua plug development (that's plug.js territory)
-  or for browser-side SB workflows; this skill is CLI-driven.
+  Cam's conventions for doing things in his SilverBullet space: starting a new project doc from the
+  Project template, pulling, filing, or handing off tasks (owned by an `@cam` / `@barbossa` mention),
+  appending to today's Captain's Log, checking what's waiting (`sb inbox`, the Mention Inbox),
+  crediting authorship with `--sign`, writing as Barbossa, resolving `sb sync` conflicts, and
+  first-time `sb`/`zk` setup on a fresh machine. Use it for "new project for X", "what's on my plate",
+  "Barbossa's backlog", "log this", "Captain's Log", "EOD summary", "anything for me", "hand this back
+  to Cam", swabs, or a sync conflict. For how the sb/zk tools work, searching notes, Space Lua, or the
+  space layout, use the silverbullet skill instead. Not for plug development or browser-side work.
 ---
 
-# SilverBullet Workflow — Cam's CLI Playbook
+# SilverBullet workflow
 
-This is the action layer. The companion `silverbullet` plugin is the reference manual — read that for what every tool does and how the directories fit together. Read this one when you're about to **do something**: start a project, pull tasks, write a log entry, set up a fresh machine.
+The `silverbullet` skill says how the tools work. This one holds Cam's conventions for the jobs
+below. It needs `sb` and `zk` on PATH and `ZK_NOTEBOOK_DIR=~/silverbullet`; if `sb version` fails,
+see [`references/cli_install.md`](references/cli_install.md) and
+[`references/first_time_setup.md`](references/first_time_setup.md) (or run `/sb-setup`).
 
-## Before you do anything: check the CLI is installed
+Last verified against: claude-opus-5-5, 2026-11-16.
 
-The first thing any session using this skill should do is verify `sb` is on `$PATH`. The check fits in one line:
+## Identity: agent writes are Barbossa
 
-```bash
-command -v sb >/dev/null 2>&1 || echo "MISSING"
-```
-
-If you see `MISSING` (or the command resolves to a wrong binary), **stop and direct the user to** [`references/cli_install.md`](references/cli_install.md) before attempting any of the workflows below. The install steps and first-time configuration live there. Once `sb version` returns cleanly, come back here.
-
-**Run `sb` like an agent:** `--no-input` (never block on a prompt), JSON output (automatic off a TTY), `--yes` only for destructive operations you've been cleared to run, and branch on exit codes — `2` usage/Lua error · `3` auth · `4` not found · `5` conflict · `6` needs `--yes`. `sb <command> --help` is the source of truth for flags; the companion `silverbullet` skill has the details.
-
-A correctly-configured shell also has:
+Barbossa is the name of Cam's agent; `claude-code` is only the harness and does not belong on new
+work. The server attributes managed-revision commits by account (since the 2026-10-11 multi-space
+cut), so an agent writing through Cam's default config looks exactly like Cam. When you write as
+the agent (`page append`, `daily`, `sync push`, a `/.fs` PUT or DELETE), use Barbossa's credentials:
 
 ```bash
-export ZK_NOTEBOOK_DIR="$HOME/silverbullet"
-export PATH="$HOME/.local/bin:$PATH"
+. ~/.config/sb-barbossa/env   # exports SB_TOKEN + SB_IDENTITY=@barbossa (checked 2026-11-16)
 ```
 
-If those aren't set, walk through [`references/first_time_setup.md`](references/first_time_setup.md).
+Leave `~/.config/sb/config.toml` alone: it is Cam's interactive identity and stays `@cam`. Do not
+reach for `XDG_CONFIG_HOME` either; it also redirects git's config lookup and silently detaches it
+for the whole process chain. Use `barbossa` for in-content authorship too (`--sign @barbossa`,
+`[author: barbossa]`, log headings). A first `sb lua` under a fresh identity cold-indexes the space
+for a few minutes before it answers.
 
-## The jobs this skill handles
+## Jobs
 
-Each maps to a slash command Cam can also invoke directly. The skill description's job is to recognise the situation and either run the command itself or surface the relevant reference.
+### New project
 
-### 1. Start a new project
+Start from `[[Library/Personal/Templates/Project]]` rather than a blank page (`/sb-new-project`
+scaffolds it). The template is a starting place, not handcuffs: adapt sections, and leave ones that
+don't apply empty. "Intermediate Packets" in particular stays empty unless there is reusable output
+with value outside the project. Details: [`references/project_template.md`](references/project_template.md).
 
-**Trigger phrases:** "new project for X", "draft up a project doc", "scope out X", "let's plan X".
+### Tasks
 
-**Rule:** *Always start from `[[Library/Personal/Templates/Project]]`* — never write a project doc from scratch. The template is the starting place. Adapt sections as needed; leave sections empty if they don't apply (especially "Intermediate Packets" — only fill it when there's reusable output with value outside the project; otherwise leave it empty rather than padding). Detailed in [`references/project_template.md`](references/project_template.md).
+Ownership is an `@name` mention (`@cam`, `@barbossa`) placed after the task text and before the
+`#tags` and `[attributes]`; that is what reaches the Mention Inbox. `[assignee: x]` is legacy: still
+read on older tasks, never written. A task is only a work item if it carries an inline channel tag
+(`#agent`, `#shared`, `#review`); untagged checkboxes are plan steps and are not indexed, so never
+put a mention on one.
 
-Use `/sb-new-project` to scaffold from the template.
-
-### 2. Pull or annotate tasks
-
-**Trigger phrases:** "my open tasks", "what's on my plate", "Barbossa's backlog", "find tasks tagged X".
-
-**The query.** The correct form is `done == false`, NOT `status == "open"` or `status == "in_progress"`. SB tasks don't have a `status` field — only `done: bool` and `state: " "/"x"/"~"`. An older form of this guidance used the broken filter and was the source of multi-day "SB index lag" false positives:
+The canonical open-task query (the same filter `/sb-tasks` and `/sb-inbox` run). Substitute the name:
 
 ```bash
-sb query 'from index.tag "task" where assignee == "barbossa" and done == false and not table.includes(itags, "meta/template/slash") order by priority desc, created desc'
+sb query 'from index.tag "task" where (table.includes(recipients, "@cam") or assignee == "cam") and done == false and not table.includes(itags, "meta/template/slash") order by priority desc, created desc'
 ```
 
-`[assignee: cam]` for tasks Cam owns, `[assignee: barbossa]` for the autonomous agent. Tasks are `- [ ]` bullets with attributes in `[key:value]` form on the same line. Do NOT track "consideration" or "look into this" items as tasks — those are bullets or notes. A task implies action and an owner. Detailed in [`references/task_patterns.md`](references/task_patterns.md).
+Matching only `assignee` misses every mention-only task written since 2026-10-11 (60 of Cam's 234
+open tasks on 2026-11-16). There is no `status` field; `done == false` is the open filter.
 
-Use `/sb-tasks` to pull the current open set.
+A task implies action and an owner. Considerations, observations, and "look into this" items stay as
+bullets. Anatomy, attributes, and the do/don't list: [`references/task_patterns.md`](references/task_patterns.md).
 
-### 3. Append a Captain's Log entry
+### Captain's Log
 
-**Trigger phrases:** "log this", "Captain's Log", "what did I do today", "EOD summary".
+One file per day at `Journals/Captains Log/YYYY-MM-DD.md`; `/sb-log` has the entry format and the
+append commands. Each entry names the task and its state, then prose: outcome first, then the
+surprise, then the evidence. Work left for Cam goes at the end as `@cam` tasks. Barbossa appends
+around the clock, so pull before appending and keep both sides of any conflict. Day roll-ups go at
+the bottom under `## Day summary`.
 
-**Structure.** One file per day at `Journals/Captains Log/YYYY-MM-DD.md`. Each entry is a `## HH:MM — author` section with `**Task:**` (linking the page touched) and `**State:**` lines, then prose: outcome first, then the surprise, then the evidence. Work left for Cam goes at the end as `[assignee: cam]` tasks (see job 6). Barbossa writes here around the clock, so **pull before appending**. Day roll-ups go at the bottom under `## Day summary`.
+### Hand-offs
 
-Use `/sb-log` to append.
+- **Picking up:** `/sb-inbox` shows open `@mentions` plus open owned tasks. Worth running at the
+  start of a session.
+- **Handing back:** end the log entry with a task Cam can act on cold: what, where, and how (repo,
+  branch, the exact command). `- [ ] … @cam #agent [author: barbossa] [created: YYYY-MM-DD] [priority: …]`
+- **Crediting vs addressing:** `--sign @name` credits the author and never reaches an inbox. Sign
+  what you append to shared pages; `@mention` only when someone needs to act.
+- **Commits you can't sign:** commit on a feature branch, never `main`, and file the signing task.
+  See [`references/task_patterns.md`](references/task_patterns.md#the-unsigned-commit-handoff).
 
-### 4. Search the space
+### Sync
 
-**Trigger phrases:** "find notes about X", "where did I write about Y", "show me everything tagged Z".
+`sb sync` is bidirectional. Run it after any direct edit under `~/silverbullet`, including
+`sb page append` and `sb daily`, which write the local file. For a bulk edit, read the
+`sb sync --dry-run` plan first. On conflicts, look before choosing
+(`sb sync resolve PATH --diff`, then `--keep-local` / `--keep-remote`), and never resolve away
+Barbossa's writes without reading them. A full-file rewrite of a page another session may be
+appending to silently drops that append, so wrap the read-modify-write in
+`~/bin/sb-edit <page-file> <command...>` (an flock on the page path; checked 2026-11-16).
 
-**Tool choice.**
+## Cam's collaboration rules
 
-- **Full-text content search** → `zk list --match "phrase"`. zk reads the filesystem directly, doesn't depend on the SB server being healthy.
-- **Structured query against the SB index** (tags, frontmatter attributes, links) → `sb query 'from index.tag "X" where …'`.
-- **Cam's Fast Search** (Meilisearch-backed, hybrid keyword+semantic) → in the SB browser UI, `Ctrl-Shift-F` opens the modal. Not currently CLI-accessible.
-
-If full-text matters most, prefer `zk`. If you need link analysis, orphans, or backlinks, `zk list --link-to` / `--linked-by`. If you need to filter on indexed fields (tags, state, priority), `sb query`. Both [`references/space_lua_pitfalls.md`](references/space_lua_pitfalls.md) and the companion `silverbullet` plugin cover the syntax in more depth.
-
-Use `/sb-search` to dispatch a search.
-
-### 5. Sync after edits
-
-`sb sync` is bidirectional. Run it after any direct edit to a file in `~/silverbullet` — including `sb page append` and `sb daily`, which write the **local** file — so the server sees your changes. For a bulk edit, run `sb sync --dry-run` first and read the plan. After syncing, `sb sync status` should show zero `conflicts`, `marker_conflicts`, and `readonly`.
-
-If there are conflicts, don't guess: `sb sync resolve PATH --diff` to look, then `--keep-local` / `--keep-remote`. Never resolve away Barbossa's writes without reading them. `sb sync prune-stashes --dry-run` shows conflict stashes that are safe to clear.
-
-Common gotchas:
-
-- **Edits during a fix-links pass** can race with `sb sync`; run fix-links first, sync after.
-- **`sb sync` after Readwise or Zotero pulls** may surface aspiring (short-name) wikilinks — run `fix-links.py` to resolve them.
-
-### 6. Hand-offs: what's waiting, and leaving work for Cam
-
-**Trigger phrases:** "what's waiting for me", "anything for me", "check my inbox", "hand this back to Cam", "leave Cam a note".
-
-- **Picking up:** `/sb-inbox` shows open `@mentions` (`sb inbox`) plus open assigned tasks. Run it at the start of a session.
-- **Handing back:** end the Captain's Log entry with a task carrying enough context to act cold — `- [ ] … #agent [assignee: cam] [author: claude-code] [created: YYYY-MM-DD] [priority: …]`. Tasks are the established channel; an `@cam` inside one also puts it in his Mention Inbox.
-- **Crediting vs addressing:** `--sign @name` (on `sb page append` / `sb daily`) *credits* the author and never reaches an inbox. Sign what you append to shared pages; `@mention` only when someone needs to act.
-- **Every agent write is `barbossa`.** Barbossa is the name of Cam's agent; `claude-code` is just the harness, and is not an identity that belongs on new work. Since the 2026-10-11 multi-space cut the server attributes managed-revision commits by **account**, so writing through the default `~/.config/sb/config.toml` (which holds *cam's* token) makes agent edits indistinguishable from Cam's own. Before any writing `sb` command — `page append`, `daily`, `sync push`, a `/.fs` PUT or DELETE — source Barbossa's credentials:
-
-  ```bash
-  . /home/nux/.config/sb-barbossa/env   # exports SB_TOKEN + SB_IDENTITY=@barbossa
-  ```
-
-  Never edit `~/.config/sb/config.toml` to achieve this: that is Cam's interactive identity and stays `@cam`. Never use `XDG_CONFIG_HOME` either — it also redirects git's config lookup (`~/.config/git` exists) and silently detaches it for the whole process chain. Use barbossa for in-content authorship too: `--sign @barbossa`, `[author: barbossa]`, and log headings. Each account gets its own headless Chrome runtime, so a first `sb lua` under a fresh identity cold-indexes the space for a few minutes before it answers.
-- **Commits you can't sign:** commit on a feature branch, never `main`, and file the signing task — see [`references/task_patterns.md`](references/task_patterns.md#the-unsigned-commit-handoff).
-
-## Space Lua sharp edges (read once)
-
-Three subtle bugs that have eaten multiple days. They live in detail in [`references/space_lua_pitfalls.md`](references/space_lua_pitfalls.md); the headlines:
-
-1. **`sb lua` takes an expression, not a statement block.** `sb lua '1+1'` returns `2`. `sb lua 'return 1+1'` is a `script_error` (exit `2`) because the endpoint doesn't accept statements — use `sb lua --script FILE` (or `-` for stdin) for those. A `script_error` is bad input, NOT a wedged bridge; a wedge surfaces as `bridge_unavailable` (HTTP 503).
-
-2. **`query` is a reserved Space Lua keyword.** Using `query` as a variable name in a `space-lua` block triggers a confusing "unexpected symbol near 'q'" parse error. Use `qstr`, `qtext`, `searchTerm`, anything else.
-
-3. **`net.proxyFetch` returns JS-wrapped userdata for leaf values.** `:method()` calls on returned strings (e.g. `hit.body:gsub(...)`) and `#` / `table.concat` on returned arrays throw "attempt to index a userdata value". Use functional `string.gsub(s, ...)` / `string.sub(...)` forms and `ipairs`-rebuild before length/concat ops. The top-level `.field` access works fine because the bridge implements `__index` — only the leaf values are JS-wrapped.
-
-## Cam's collaboration patterns (apply throughout)
-
-- **Templates as starting places.** The Project template (and any other) is a starting point, not handcuffs — adapt as the work demands. Empty sections that don't apply are a feature, not a bug.
-- **Tasks vs bullets.** A task implies action and an owner. Notes, observations, considerations stay as bullets.
-- **Ownership is an `@name` mention**: `@cam` for Cam, `@barbossa` for the agent, placed
-  after the task text and before the `#tags`/`[attributes]`. This is what reaches the
-  Mention Inbox. `[assignee: cam]` is **legacy** — still read on older tasks, no longer
-  written. No mention and no assignee = nobody owns it.
-- **Report-only first for destructive ops.** Bulk deletes, mass edits, anything irreversible — propose the plan, wait for explicit approval, then execute.
-- **Verify before relaying.** When a sub-agent reports work done, check the diff or output before passing the claim up the chain.
-- **Captain framing.** Cam addresses agents as Captain and is addressed as same; light pirate vocabulary is welcome but not overdone.
+- **Report-only first for destructive ops.** Bulk deletes, mass edits, anything irreversible:
+  propose the plan, wait for explicit approval, then execute.
+- **Verify before relaying** a sub-agent's claim; check the diff or output.
+- **Captain framing.** Cam addresses agents as Captain and is addressed as same; light pirate
+  vocabulary is welcome but not overdone.
 
 ## References
 
-- [`references/cli_install.md`](references/cli_install.md) — install `sb` (slim vs AI build), `sb upgrade`, install `zk`
-- [`references/first_time_setup.md`](references/first_time_setup.md) — copy config from warrig, the config format, first pull, `zk` index
-- [`references/task_patterns.md`](references/task_patterns.md) — the corrected query, `[assignee: ]` convention, hand-off patterns (including unsigned commits), do/don't list
-- [`references/project_template.md`](references/project_template.md) — what the Project template has, what to fill, what to skip
-- [`references/space_lua_pitfalls.md`](references/space_lua_pitfalls.md) — the three sharp edges with examples and fixes, plus `--script`
+- [`references/task_patterns.md`](references/task_patterns.md): task anatomy, the indexing rule, hand-off patterns
+- [`references/project_template.md`](references/project_template.md): what the Project template has, what to fill
+- [`references/cli_install.md`](references/cli_install.md), [`references/first_time_setup.md`](references/first_time_setup.md): fresh-machine setup
+- [`references/space_lua_pitfalls.md`](references/space_lua_pitfalls.md): `sb lua` expression form, reserved `query`, `net.proxyFetch` userdata
+
+## Maintaining this skill
+
+Taste (the rules above, the template stance, tasks vs bullets) is durable. Environment facts (paths,
+the credential file, the task schema, counts) are dated; re-check them with the query above and
+`sb describe task` when they look off. If a newer model handles a job well without a section, cut it.
