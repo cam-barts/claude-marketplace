@@ -42,7 +42,7 @@ cargo install --git https://github.com/cam-barts/sb-cli                 # slim
 cargo install --git https://github.com/cam-barts/sb-cli --features ai   # ai
 ```
 
-On warrig, `~/.local/bin/sb` is a symlink into a local build (`~/git_local/sb-cli/target/release/sb`), so `cargo build --release --features ai` there updates it in place — and means warrig can run unreleased code. Check `sb version` → `commit:` if behaviour differs between machines.
+On warrig, `~/.local/bin/sb` is a symlink to a `cargo install` copy (`~/.local/share/cargo/bin/sb`, since 2026-11-17), not into `~/git_local/sb-cli/target/`: a `cargo clean` there once deleted the binary and broke every `sb` caller, Barbossa's cron included. Update it with `cargo install --path ~/git_local/sb-cli --locked` (add `--features ai` for `sb mcp serve` / `sb skills`; the current install is slim). sb-cli's `scripts/reinstall-if-released.sh` does this automatically on a post-merge hook once installed. warrig can still run unreleased code; check `sb version` → `commit:` if behaviour differs between machines.
 
 ## Install `zk`
 
