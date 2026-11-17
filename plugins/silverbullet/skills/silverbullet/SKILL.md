@@ -213,7 +213,7 @@ A multi-word `--match` phrase has silently returned zero (verified 2026-11-16); 
 | Folder | Contents |
 |--------|----------|
 | `Readwise/` | Readwise-synced books and articles with `#highlight` data blocks |
-| `Zotero/` | Zotero-synced papers with `#annotation` data blocks |
+| `Zotero/` | Zotero-synced papers with `#highlight` data blocks (Cam's annotations, plus enrich-paper's AI picks) |
 | `Z/` | Concept/idea notes (zettelkasten-style) |
 | `Persuasion Techniques/` | Cognitive biases, fallacies, rhetoric, propaganda |
 | `Library/Personal/` | Integration code: Readwise.md, Zotero.md, Widgets.md, etc. |
@@ -253,8 +253,12 @@ specific notes. Don't create one-off tags — if only one note would have it, it
 
 SilverBullet v2 indexes fenced code blocks as queryable data objects:
 
-- `` ```#highlight `` — Readwise highlights (`readwiseId`, `text`, `location`, `color`, etc.)
-- `` ```#annotation `` — Zotero annotations (`zoteroKey`, `text`, `page`, `color`, `pdfUrl`, etc.)
+- `` ```#highlight ``: every highlight in the space, one tag since 2026-10-15. Tell the source by field:
+  - Readwise: `readwiseId`, `text`, `location`, `color`, `readwiseNote`, ...
+  - Cam's Zotero annotations: `zoteroKey`, `text`, `pdfPage`, `color` (hex), `comment`, `pdfUrl`, ...
+  - AI impact highlights (enrich-paper): `aiGenerated: true`, `text`, `reason`, `model`, `generatedAt`, `pdfPage` when known.
+    These are the AI's picks, not Cam's: filter with `where not _.aiGenerated` when you mean his.
+- `` ```#annotation ``: the pre-2026-10-15 name for Zotero annotations. The Zotero sync still reads it.
 
 Query them with `sb query` or in Space Lua with `query[[from index.tag "highlight" where ...]]`.
 

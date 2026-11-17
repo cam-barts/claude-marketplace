@@ -95,7 +95,7 @@ returns `Persuasion Techniques/` pages, which orphan mode excludes by prefix, an
 zero-inbound pages are `Zotero/` papers nothing links to yet.
 
 **Do not reflexively discard Zotero pages.** An *enriched* one (it has an `## Enrichment` block with
-"Impact highlights") carries pulled quotes with page-level commentary and is some of the richest
+"Impact highlights", now `#highlight` objects flagged `aiGenerated`) carries pulled quotes with page-level commentary and is some of the richest
 material in the space — three of the four Zotero pages in the 2026-08-12 round produced connections,
 all from their enrichment quotes. An *unenriched* one is frontmatter and an abstract; that is the
 one to discard, or hand to `/enrich-paper`.
