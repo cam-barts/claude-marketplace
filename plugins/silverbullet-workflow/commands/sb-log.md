@@ -1,92 +1,85 @@
 ---
 description: Append an entry to today's Captain's Log
-argument-hint: <task summary> [state] [author]
+argument-hint: <task summary> [result]
 ---
 
-Append a timestamped entry to today's Captain's Log (`Journals/Captains Log/YYYY-MM-DD.md`), in the format the log has used since June 2026. Creates the day's file if it doesn't exist.
+Append an entry to today's Captain's Log (`Journals/Captains Log/YYYY-MM-DD.md`). The log is Barbossa's daily note: with `~/.config/sb-barbossa/env` sourced, `SB_DAILY_PATH` points `sb daily` at it, so logging is just `sb daily`. Format since 2026-11-18; older days were back-ported.
 
 ## Arguments
 
-- `task` (required) — one line: what the work was. Link the page it touched: `Fix the ETag path ([[Repositories/sb-cli]])`.
-- `state` (optional, default: `done`) — `done` | `in progress` | `blocked` | `awaiting <thing>` (e.g. `awaiting signature`).
-- `author` (optional) — who's writing. **Always a barbossa identity**: `barbossa (interactive session with Cam)` for interactive work, `barbossa-worker` for autonomous runs. Keep the parenthetical so the interactive-vs-autonomous distinction survives. Do not sign log entries as `claude` or `claude-code`; that is the harness, not Cam's agent.
+- `task` (required): one line saying what the work was. Link the page it touched: `Fix the ETag path ([[Repositories/sb-cli]])`.
+- `result` (optional, default: `done`): `done` | `in progress` | `blocked` | `awaiting <thing>` (e.g. `awaiting signature`).
 
-The body — what happened, what was found, what's left — is composed from the session, not passed as an argument.
+The body (what happened, what was found, what is left) is composed from the session, not passed as an argument.
 
 ## Entry format
 
+Each entry is one `sb daily` item. `sb` adds the `[time:: HH:MM]` stamp; `--sign @barbossa` credits the author (it never queues a mention). The headline carries the task link and a `[result:: …]` attribute; prose paragraphs follow on stdin and stay indented inside the item:
+
 ```markdown
-## 14:05 — barbossa-worker
-**Task:** Integrate the edge server features into `sb-cli` ([[Repositories/sb-cli]])
-**State:** awaiting signature
+* [time:: 14:05] Integrate the edge server features into `sb-cli` ([[Repositories/sb-cli]]) [result:: awaiting signature]
 
-Prose paragraphs: what was done, what was surprising, what was verified and how.
-Name commits, paths, and counts. Link the pages touched.
-
-- [ ] Follow-up that needs Cam @cam #agent [author: barbossa] [created: 2026-09-04] [priority: medium]
+  Prose paragraphs: what was done, what was surprising, what was verified and how.
+  Name commits, paths, and counts. Link the pages touched. -- @barbossa
+* [ ] [time:: 14:05] Sign the 3 commits on `feat/edge` in `~/git_local/sb-cli`, then merge @cam [author: barbossa] [created: 2026-11-18] [priority: medium] #agent -- @barbossa
 ```
 
-- Heading: `## HH:MM — author` (local 24h time). Interactive sessions use a hyphen and a parenthetical: `## 03:40 - barbossa (interactive session with Cam)`.
-- `**Tier:**` appears only on Barbossa's autonomous entries (`opus → claude-opus-5`); leave it out otherwise.
-- Follow-ups for Cam are **tasks** at the end of the entry, addressed with an `@cam`
-  mention (that is what puts them in his Mention Inbox; `[assignee:]` is legacy and no
-  longer written), with the full attribute set — see [`task_patterns.md`](../skills/silverbullet-workflow/references/task_patterns.md). This is how work gets handed back; it's what `/sb-tasks` pulls.
-- Don't `--sign` log entries: the heading already names the author.
+- `result`, not `state`: `state` is a reserved field on task items. Query it: `sb query 'from index.tag "item" where page:startsWith("Journals/Captains Log/") and result == "blocked"'`.
+- Autonomous worker entries also carry `[tier:: …] [model:: …]`; interactive entries don't, which is what tells them apart.
+- Follow-ups for Cam are separate `--task-tag agent` entries addressed with an `@cam` mention (that puts them in his Mention Inbox; `[assignee:]` is legacy) and the full attribute set from [`task_patterns.md`](../skills/silverbullet-workflow/references/task_patterns.md). Use plain `--task` for a Barbossa-owned task.
 
 ## Steps
 
-1. **Resolve the page and time** in the local timezone:
+1. **Set up as Barbossa** (this is what routes `sb daily` to the log, not to Cam's Inbox):
 
    ```bash
    export PATH="$HOME/.local/bin:$PATH"
-   . ~/.config/sb-barbossa/env   # write as Barbossa, not through Cam's config
-   TODAY=$(date +%Y-%m-%d)
-   NOW=$(date +%H:%M)
-   PAGE="Journals/Captains Log/${TODAY}"
+   . ~/.config/sb-barbossa/env
+   cd ~/silverbullet
    ```
 
-2. **Pull first** so you append to the server's latest copy, not a stale one — Barbossa writes here around the clock:
+2. **Pull first.** Barbossa writes here around the clock.
 
    ```bash
-   cd ~/silverbullet && sb --no-input sync pull 2>&1 | tail -1
+   sb --no-input sync pull 2>&1 | tail -1
    ```
 
-3. **Compose the entry** into `$ENTRY` (heading, `**Task:**`, `**State:**`, blank line, body, optional tasks). If the day's file doesn't exist yet, prefix the page heading:
+3. **Append** the entry (headline + body on stdin), then any follow-up tasks. `sb daily` writes the **local** file:
 
    ```bash
-   test -f ~/silverbullet/"${PAGE}.md" || ENTRY="# Captain's Log — ${TODAY}
-   ${ENTRY}"
+   printf '%s\n\n%s\n' "$HEADLINE [result:: done]" "$BODY" | sb --no-input daily --sign @barbossa
+   sb --no-input daily --task-tag agent --sign @barbossa "Follow-up … @cam [author: barbossa] [created: $(date +%F)] [priority: medium]"
    ```
 
-4. **Append.** `sb page append` handles the leading newline and creates the file if needed. It writes the **local** file:
+   Missed a day? Prefix the text with `yesterday:` or `YYYY-MM-DD:`, or pass `--on YYYY-MM-DD`.
 
-   ```bash
-   sb --no-input page append "$PAGE" --content "$ENTRY"
-   ```
-
-5. **Push and confirm** nothing was refused:
+4. **Push and confirm** nothing was refused:
 
    ```bash
    sb --no-input sync push 2>&1 | tail -1
    ```
 
-   Expect `Push complete: 1 uploaded, 0 conflicts, … 0 failed`. A conflict means someone wrote the log in between — `sb sync resolve "${PAGE}.md" --diff`, keep both entries, never drop Barbossa's.
+   Expect `Push complete: 1 uploaded, 0 conflicts, … 0 failed`. A conflict means someone wrote the log in between. Run `sb sync resolve "Journals/Captains Log/$(date +%F).md" --diff`, keep both entries, never drop Barbossa's.
 
-6. **Surface the link:**
+5. **Surface the link:**
 
    ```text
    Logged to [[Journals/Captains Log/YYYY-MM-DD]].
    Open: https://bullet.coder.cam/Journals/Captains%20Log/YYYY-MM-DD
    ```
 
+## Reading the log
+
+`sb daily` read mode works on the log once the env is sourced: `sb daily -n 20`, `--contains zotero`, `--from 2026-11-01 --to 2026-11-07`, `--starred`, `--tags agent`.
+
 ## Style
 
-- Prose, not bullets — the log is read later, by Cam. Lead with the outcome, then the surprise, then the evidence.
+- Prose, not bullets: the log is read later, by Cam. Lead with the outcome, then the surprise, then the evidence.
 - Be concrete: commit hashes, file paths, counts, what was verified live versus in tests.
 - Name what's **left**, as tasks with an owner, not as a vague "next steps" paragraph.
-- A day roll-up, when asked for, goes at the bottom under `## Day summary`.
+- A day roll-up, when asked for, is a `--star` entry starting `Day summary:`.
 
 ## See also
 
-- [`task_patterns.md`](../skills/silverbullet-workflow/references/task_patterns.md) — task anatomy and the handoff patterns
-- [`/sb-inbox`](sb-inbox.md) — the other half of a handoff
+- [`task_patterns.md`](../skills/silverbullet-workflow/references/task_patterns.md): task anatomy and the handoff patterns
+- [`/sb-inbox`](sb-inbox.md): the other half of a handoff

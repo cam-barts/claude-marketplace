@@ -68,11 +68,13 @@ bullets. Anatomy, attributes, and the do/don't list: [`references/task_patterns.
 
 ### Captain's Log
 
-One file per day at `Journals/Captains Log/YYYY-MM-DD.md`; `/sb-log` has the entry format and the
-append commands. Each entry names the task and its state, then prose: outcome first, then the
-surprise, then the evidence. Work left for Cam goes at the end as `@cam` tasks. Barbossa appends
-around the clock, so pull before appending and keep both sides of any conflict. Day roll-ups go at
-the bottom under `## Day summary`.
+One file per day at `Journals/Captains Log/YYYY-MM-DD.md`, and it is Barbossa's daily note: with
+`~/.config/sb-barbossa/env` sourced, `sb daily --sign @barbossa "…"` appends a log entry and
+`sb daily -n 20` / `--contains X` reads it back. `/sb-log` has the entry format. Each entry is one
+item: the task link and a `[result:: …]` attribute, then prose (outcome first, then the surprise,
+then the evidence). Work left for Cam goes in `--task-tag agent` entries with an `@cam` mention.
+Barbossa appends around the clock, so pull before appending and keep both sides of any conflict.
+Day roll-ups are a `--star` entry starting `Day summary:`.
 
 ### Hand-offs
 

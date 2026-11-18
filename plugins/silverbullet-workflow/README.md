@@ -20,7 +20,7 @@ Covers:
 - Task workflows: one canonical open-task query (`@mention` with a legacy `[assignee:]` fallback), tasks vs bullets
 - Hand-offs — `sb inbox` for `@mentions`, handoff tasks for Cam, `--sign` to credit authorship, and the unsigned-commit handoff
 - Project creation — always start from `Library/Personal/Templates/Project` rather than blank
-- Captain's Log — the `## HH:MM — author` entry format, pull-before-append, follow-up tasks
+- Captain's Log: Barbossa's `sb daily` note, one item per entry with `[result::]`, pull-before-append, follow-up tasks
 - Space Lua quirks reference: expression-not-statement form, reserved `query` keyword, `net.proxyFetch` userdata pitfalls
 
 ### serendipity-gardening
@@ -41,7 +41,7 @@ Covers:
 - `/sb-tasks`: pull Cam's (or Barbossa's) open tasks from the indexed view with the canonical query.
 - `/sb-new-project` — start a new project doc from `Library/Personal/Templates/Project`, sync to server.
 - `/sb-search` — full-text search across the space, choosing between `zk` and `sb query` based on what the user wants.
-- `/sb-log` — append an entry to today's Captain's Log, in the current `## HH:MM — author` format.
+- `/sb-log`: append an entry to today's Captain's Log via `sb daily` under Barbossa's env.
 - `/sb-inbox`: what's waiting for someone, open `@mentions` plus the open tasks they own.
 - `/sb-garden` — run a serendipity gardening round: random draw, connection hunt, ephemeral scratch page.
 

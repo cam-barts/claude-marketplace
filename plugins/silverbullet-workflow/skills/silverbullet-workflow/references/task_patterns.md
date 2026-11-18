@@ -129,7 +129,7 @@ Don't promote considerations to tasks just because they're written down. Bullets
 
 ## Handing work back to Cam
 
-When an agent finishes work that needs a human step, it ends its Captain's Log entry with a task for Cam, carrying the full context needed to act without re-reading the session:
+When an agent finishes work that needs a human step, it follows its Captain's Log entry with a task for Cam (`sb daily --task-tag agent --sign @barbossa "…"` under Barbossa's env), carrying the full context needed to act without re-reading the session:
 
 ```markdown
 - [ ] Sign the 31 commits on branch `feat/edge-integration` in `~/git_local/sb-cli`, then merge to main. … @cam #agent [author: barbossa] [created: 2026-09-04] [priority: medium]
@@ -158,12 +158,9 @@ Verify with `git log --format='%h %G? %s'` (`G` = good signature) before pushing
 When Barbossa completes a task in a fire, the Captain's Log entry references it:
 
 ```markdown
-## 09:34 — barbossa-worker
-**Task:** Confirm the Meilisearch data dir is in backup ([[Projects/SilverBullet Fast Search]])
-**Tier:** opus → claude-opus-5
-**State:** done
+* [time:: 09:34] Confirm the Meilisearch data dir is in backup ([[Projects/SilverBullet Fast Search]]) [result:: done] [tier:: opus] [model:: claude-opus-5]
 
-Found two redundant paths (gastown rsnapshot + warrig borgmatic); restore procedure documented. Marked `[x]` on the task line.
+  Found two redundant paths (gastown rsnapshot + warrig borgmatic); restore procedure documented. Marked `[x]` on the task line. -- @barbossa
 ```
 
 This makes the audit trail across the log + project doc consistent.
